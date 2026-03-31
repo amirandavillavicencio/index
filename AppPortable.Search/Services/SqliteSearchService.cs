@@ -8,12 +8,13 @@ public sealed class SqliteSearchService(ILocalStorageService localStorageService
 {
     public async Task<IReadOnlyList<SearchResult>> SearchAsync(string query, int limit = 50, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(query))
+        if (string.IsNullOrWhiteSpace(query) || limit <= 0)
         {
             return [];
         }
 
         await indexService.EnsureInitializedAsync(cancellationToken);
+
         await using var connection = new SqliteConnection($"Data Source={localStorageService.DatabasePath}");
         await connection.OpenAsync(cancellationToken);
 
@@ -24,12 +25,12 @@ public sealed class SqliteSearchService(ILocalStorageService localStorageService
                                   c.page_start,
                                   c.page_end,
                                   bm25(document_chunks_fts) AS score,
-                                  snippet(document_chunks_fts, 3, '[', ']', ' … ', 24) AS snippet,
+                                  snippet(document_chunks_fts, 3, '[', ']', ' … ', 18) AS snippet,
                                   c.text
                            FROM document_chunks_fts
                            JOIN document_chunks c ON c.rowid = document_chunks_fts.rowid
                            WHERE document_chunks_fts MATCH $query
-                           ORDER BY score
+                           ORDER BY score ASC
                            LIMIT $limit;
                            """;
 
@@ -40,8 +41,12 @@ public sealed class SqliteSearchService(ILocalStorageService localStorageService
 
         var results = new List<SearchResult>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
         while (await reader.ReadAsync(cancellationToken))
         {
+            var chunkText = reader.IsDBNull(7) ? string.Empty : reader.GetString(7);
+            var snippet = reader.IsDBNull(6) ? string.Empty : reader.GetString(6);
+
             results.Add(new SearchResult
             {
                 ChunkId = reader.GetString(0),
@@ -50,8 +55,8 @@ public sealed class SqliteSearchService(ILocalStorageService localStorageService
                 PageStart = reader.GetInt32(3),
                 PageEnd = reader.GetInt32(4),
                 Score = reader.GetDouble(5),
-                Snippet = reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
-                ChunkText = reader.IsDBNull(7) ? null : reader.GetString(7)
+                Snippet = string.IsNullOrWhiteSpace(snippet) ? chunkText : snippet,
+                ChunkText = chunkText
             });
         }
 
