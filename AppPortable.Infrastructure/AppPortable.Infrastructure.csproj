@@ -2,8 +2,10 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\AppPortable.Core\AppPortable.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="itext7" Version="8.0.5" />
   </ItemGroup>
 </Project>
