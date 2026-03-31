@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows;
+using System.Windows.Threading;
 using AppPortable.Core.Interfaces;
 using AppPortable.Core.Models;
 using AppPortable.Desktop.Commands;
@@ -18,6 +20,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly IIndexService _indexService;
     private readonly ISearchService _searchService;
     private readonly IDocumentProcessor _documentProcessor;
+    private readonly Dispatcher _dispatcher;
 
     private string _searchText = string.Empty;
     private string _statusMessage = "Listo";
@@ -38,6 +41,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public MainViewModel()
     {
+        _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         _storageService = new LocalStorageService();
         _jsonPersistenceService = new JsonPersistenceService();
         _indexService = new SqliteIndexService(_storageService);
@@ -138,7 +142,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             SetStatus("Inicializando...");
             await _indexService.EnsureInitializedAsync();
-            Documents.Clear();
+            await RunOnUiThreadAsync(() => Documents.Clear());
 
             var docs = new List<ProcessedDocument>();
             foreach (var jsonFile in Directory.EnumerateFiles(_storageService.JsonPath, "*.json"))
@@ -150,18 +154,21 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 }
             }
 
-            foreach (var document in docs.OrderByDescending(d => d.ProcessedAt))
+            await RunOnUiThreadAsync(() =>
             {
-                Documents.Add(new DocumentListItem { Document = document });
-            }
+                foreach (var document in docs.OrderByDescending(d => d.ProcessedAt))
+                {
+                    Documents.Add(new DocumentListItem { Document = document });
+                }
 
-            if (Documents.Count > 0)
-            {
-                SelectedDocument = Documents[0];
-            }
+                if (Documents.Count > 0)
+                {
+                    SelectedDocument = Documents[0];
+                }
+            });
 
             SetStatus($"Documentos cargados: {Documents.Count}");
-            ReindexCommand.RaiseCanExecuteChanged();
+            await RunOnUiThreadAsync(() => ReindexCommand.RaiseCanExecuteChanged());
         }
         catch (Exception ex)
         {
@@ -190,11 +197,15 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
             var document = await _documentProcessor.ProcessAsync(dialog.FileName);
             var item = new DocumentListItem { Document = document };
-            Documents.Insert(0, item);
-            SelectedDocument = item;
+
+            await RunOnUiThreadAsync(() =>
+            {
+                Documents.Insert(0, item);
+                SelectedDocument = item;
+                ReindexCommand.RaiseCanExecuteChanged();
+            });
 
             SetStatus($"Documento procesado: {document.DocumentId}");
-            ReindexCommand.RaiseCanExecuteChanged();
         }
         catch (Exception ex)
         {
@@ -214,20 +225,30 @@ public sealed class MainViewModel : INotifyPropertyChanged
             SetStatus($"Buscando: '{SearchText.Trim()}'...");
 
             var results = await _searchService.SearchAsync(SearchText.Trim(), 100);
-            SearchResults.Clear();
-            foreach (var result in results)
+            await RunOnUiThreadAsync(() =>
             {
-                SearchResults.Add(result);
-            }
+                SearchResults.Clear();
+                foreach (var result in results)
+                {
+                    SearchResults.Add(result);
+                }
+
+                if (SearchResults.Count > 0)
+                {
+                    SelectedResult = SearchResults[0];
+                }
+                else
+                {
+                    SelectedResult = null;
+                }
+            });
 
             if (SearchResults.Count > 0)
             {
-                SelectedResult = SearchResults[0];
                 SetStatus($"Resultados encontrados: {SearchResults.Count}");
             }
             else
             {
-                SelectedResult = null;
                 SetStatus("Sin resultados para la consulta.");
             }
         }
@@ -268,14 +289,42 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     private void SetStatus(string status)
     {
-        ErrorMessage = string.Empty;
-        StatusMessage = status;
+        RunOnUiThread(() =>
+        {
+            ErrorMessage = string.Empty;
+            StatusMessage = status;
+        });
     }
 
     private void SetError(string error)
     {
-        ErrorMessage = error;
-        StatusMessage = "Error";
+        RunOnUiThread(() =>
+        {
+            ErrorMessage = error;
+            StatusMessage = "Error";
+        });
+    }
+
+    private void RunOnUiThread(Action action)
+    {
+        if (_dispatcher.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        _dispatcher.Invoke(action);
+    }
+
+    private Task RunOnUiThreadAsync(Action action)
+    {
+        if (_dispatcher.CheckAccess())
+        {
+            action();
+            return Task.CompletedTask;
+        }
+
+        return _dispatcher.InvokeAsync(action, DispatcherPriority.DataBind).Task;
     }
 
     private static string BuildDocumentDetail(ProcessedDocument document)
@@ -309,6 +358,18 @@ public sealed class MainViewModel : INotifyPropertyChanged
     }
 
     private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    {
+        if (_dispatcher.CheckAccess())
+        {
+            return SetPropertyInternal(ref field, value, propertyName);
+        }
+
+        var changed = false;
+        _dispatcher.Invoke(() => changed = SetPropertyInternal(ref field, value, propertyName));
+        return changed;
+    }
+
+    private bool SetPropertyInternal<T>(ref T field, T value, string? propertyName)
     {
         if (EqualityComparer<T>.Default.Equals(field, value))
         {
