@@ -1,5 +1,4 @@
 using AppPortable.Core.Interfaces;
-using AppPortable.Core.Services;
 using AppPortable.Infrastructure.Services;
 using AppPortable.Search.Services;
 using AppPortable.Tests.TestHelpers;
@@ -17,7 +16,7 @@ public sealed class PipelineTests
         var extractor = new PdfExtractionService();
         var chunking = new ParagraphChunkingService(300, 80);
         var index = new SqliteIndexService(storage);
-        var processor = new DocumentProcessor(storage, extractor, chunking, json, index);
+        var processor = new InfrastructureDocumentProcessor(storage, extractor, new TesseractOcrService(), chunking, json, index);
         var search = new SqliteSearchService(storage, index);
         var pdf = TestPdfFactory.CreatePdfWithPages("contenido de prueba para pipeline y búsqueda");
 

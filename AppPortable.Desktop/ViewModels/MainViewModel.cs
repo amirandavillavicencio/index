@@ -4,7 +4,6 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using AppPortable.Core.Interfaces;
 using AppPortable.Core.Models;
-using AppPortable.Core.Services;
 using AppPortable.Desktop.Commands;
 using AppPortable.Desktop.Models;
 using AppPortable.Infrastructure.Services;
@@ -44,9 +43,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _indexService = new SqliteIndexService(_storageService);
         _searchService = new SqliteSearchService(_storageService, _indexService);
 
-        _documentProcessor = new DocumentProcessor(
+        _documentProcessor = new InfrastructureDocumentProcessor(
             _storageService,
             new PdfExtractionService(),
+            new TesseractOcrService(),
             new ParagraphChunkingService(),
             _jsonPersistenceService,
             _indexService);
@@ -142,7 +142,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
             foreach (var jsonFile in Directory.EnumerateFiles(_storageService.JsonPath, "*.json").OrderByDescending(f => f))
             {
-                var doc = await _jsonPersistenceService.LoadAsync<ProcessedDocument>(jsonFile);
+                var doc = await _jsonPersistenceService.LoadDocumentAsync(jsonFile);
                 if (doc is not null)
                 {
                     Documents.Add(new DocumentListItem { Document = doc });
