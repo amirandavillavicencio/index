@@ -1,3 +1,4 @@
+using System.IO;
 using AppPortable.Core.Models;
 
 namespace AppPortable.Desktop.Models;

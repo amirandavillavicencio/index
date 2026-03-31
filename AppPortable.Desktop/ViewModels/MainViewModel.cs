@@ -10,7 +10,7 @@ using AppPortable.Desktop.Models;
 using AppPortable.Infrastructure.Services;
 using AppPortable.Search.Services;
 using Microsoft.Win32;
-
+using System.IO;
 namespace AppPortable.Desktop.ViewModels;
 
 public sealed class MainViewModel : INotifyPropertyChanged
