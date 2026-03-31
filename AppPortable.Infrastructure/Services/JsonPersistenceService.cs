@@ -32,8 +32,48 @@ public sealed class JsonPersistenceService : IJsonPersistenceService
             Directory.CreateDirectory(directory);
         }
 
-        await using var stream = File.Create(path);
-        await JsonSerializer.SerializeAsync(stream, data, Options, cancellationToken);
+        var tempPath = Path.Combine(
+            directory ?? Directory.GetCurrentDirectory(),
+            $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+
+        try
+        {
+            await using (var stream = new FileStream(
+                             tempPath,
+                             FileMode.CreateNew,
+                             FileAccess.Write,
+                             FileShare.None,
+                             4096,
+                             FileOptions.WriteThrough))
+            {
+                await JsonSerializer.SerializeAsync(stream, data, Options, cancellationToken);
+                await stream.FlushAsync(cancellationToken);
+            }
+
+            if (File.Exists(path))
+            {
+                var backupPath = $"{path}.bak";
+                File.Replace(tempPath, path, backupPath, ignoreMetadataErrors: true);
+
+                if (File.Exists(backupPath))
+                {
+                    File.Delete(backupPath);
+                }
+            }
+            else
+            {
+                File.Move(tempPath, path);
+            }
+        }
+        catch
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+
+            throw;
+        }
     }
 
     public async Task<T?> LoadAsync<T>(string path, CancellationToken cancellationToken = default)
