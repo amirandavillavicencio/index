@@ -15,4 +15,7 @@ public interface ILocalStorageService
     Task<string> CopySourceDocumentAsync(string sourcePdfPath, CancellationToken cancellationToken = default);
     string GetDocumentJsonPath(string documentId);
     string GetChunksJsonPath(string documentId);
+    string GetIndexPath(string indexName);
+    string GetTempFilePath(string fileName);
+    string GetLogFilePath(DateTime dateUtc);
 }
