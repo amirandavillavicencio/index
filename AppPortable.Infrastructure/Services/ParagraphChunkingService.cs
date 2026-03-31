@@ -17,6 +17,9 @@ public sealed class ParagraphChunkingService : IChunkingService
         _minimumChars = minimumChars;
     }
 
+    public IReadOnlyList<DocumentChunk> CreateChunks(ProcessedDocument document)
+        => CreateChunks(document.DocumentId, document.SourceFile, document.Pages);
+
     public IReadOnlyList<DocumentChunk> CreateChunks(string documentId, string sourceFile, IReadOnlyList<DocumentPage> pages)
     {
         var paragraphItems = SplitParagraphs(pages);
@@ -96,7 +99,7 @@ public sealed class ParagraphChunkingService : IChunkingService
             var paragraphs = Regex.Split(normalized, "\\n{2,}")
                 .Select(p => p.Trim())
                 .Where(p => p.Length > 0)
-                .Select(p => NormalizeParagraph(p));
+                .Select(NormalizeParagraph);
 
             foreach (var paragraph in paragraphs)
             {
@@ -128,8 +131,10 @@ public sealed class ParagraphChunkingService : IChunkingService
                 sb.AppendLine();
                 sb.AppendLine();
             }
+
             sb.Append(paragraph);
         }
+
         return sb.ToString();
     }
 
@@ -137,7 +142,7 @@ public sealed class ParagraphChunkingService : IChunkingService
     {
         var pageStart = selected.Min(s => s.PageNumber);
         var pageEnd = selected.Max(s => s.PageNumber);
-        var layers = selected.Select(s => s.Layer.ToString()).Distinct().ToList();
+        var layers = selected.Select(s => s.Layer).Distinct().ToList();
 
         return new DocumentChunk
         {
