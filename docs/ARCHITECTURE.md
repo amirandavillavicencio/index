@@ -1,41 +1,114 @@
 # Architecture
 
-## Capas
+## Visión general
 
-## AppPortable.Core
-- Entidades de dominio (`ProcessedDocument`, `DocumentPage`, `DocumentChunk`, `SearchResult`, `ExtractionSummary`).
-- Enum `ExtractionLayer`.
-- Interfaces (`IPdfExtractionService`, `IJsonPersistenceService`, `ILocalStorageService`, `IChunkingService`, `IIndexService`, `ISearchService`, `IDocumentProcessor`, `IOcrService`).
-- Pipeline de orquestación `DocumentProcessor`.
+AppPortable implementa un pipeline local para procesamiento documental:
 
-## AppPortable.Infrastructure
-- `PdfExtractionService`: extracción por página con iText7.
-- `LocalStorageService`: manejo de `%LOCALAPPDATA%\AppPortable`.
-- `JsonPersistenceService`: serialización `snake_case`.
-- `ParagraphChunkingService`: chunking por párrafos con overlap del 10%.
+**PDF -> extracción por página -> (fallback OCR) -> documento procesado -> chunking -> JSON -> SQLite FTS5 -> búsqueda local**
 
-## AppPortable.Search
-- `SqliteIndexService`: tablas base + FTS5 + indexación y rebuild.
-- `SqliteSearchService`: búsqueda `MATCH`, ranking `bm25`, `snippet`.
+Todo el flujo se ejecuta localmente, sin servicios externos obligatorios.
 
-## AppPortable.Desktop
-- WPF + MVVM con `MainViewModel`.
-- Comandos: carga, búsqueda, reindexación.
-- Paneles: documentos, búsqueda/resultados, detalle.
+## Capas y responsabilidades
 
-## Flujo del pipeline
+## 1) AppPortable.Core
 
-1. Copia PDF al storage local.
-2. Extrae texto por página.
-3. Construye `ProcessedDocument`.
-4. Calcula `document_id` estable por hash.
-5. Genera chunks.
-6. Persiste JSON de documento y chunks.
-7. Indexa chunks en SQLite FTS5.
-8. Devuelve resultado para UI.
+Responsabilidad: contratos y orquestación de dominio.
 
-## Decisiones técnicas
+Incluye:
 
-- OCR solo preparado a nivel de interfaz (`IOcrService`) para mantener estabilidad inicial.
-- SQLite FTS5 local para cero dependencias externas.
-- JSON local legible e interoperable.
+- Modelos de dominio (`ProcessedDocument`, `DocumentPage`, `DocumentChunk`, `SearchResult`, `ExtractionSummary`).
+- Enum de capa de extracción (`ExtractionLayer`).
+- Interfaces de servicios (`IPdfExtractionService`, `IOcrService`, `IChunkingService`, `IJsonPersistenceService`, `ILocalStorageService`, `IIndexService`, `ISearchService`, `IDocumentProcessor`).
+- `DocumentProcessor` como orquestador del pipeline.
+
+Core no depende de UI ni de detalles de infraestructura concretos.
+
+## 2) AppPortable.Infrastructure
+
+Responsabilidad: implementación de servicios de entrada/salida y procesamiento técnico.
+
+Incluye:
+
+- `PdfExtractionService` (iText7) para texto nativo por página.
+- `TesseractOcrService` como fallback OCR condicionado por disponibilidad de `tesseract`.
+- `LocalStorageService` para estructura local de archivos.
+- `JsonPersistenceService` para serialización/deserialización JSON en `snake_case`.
+- `ParagraphChunkingService` para segmentación por párrafos con overlap.
+- `InfrastructureDocumentProcessor` como composición de dependencias de infraestructura sobre `DocumentProcessor`.
+
+### OCR fallback (estado actual)
+
+- El fallback OCR se intenta solo si está habilitado y hay páginas sin texto.
+- La disponibilidad OCR depende de detectar `tesseract` en `PATH`.
+- En el estado actual, el servicio no realiza OCR completo por imagen/página; conserva texto existente y emite advertencias de no aplicación real.
+
+## 3) AppPortable.Search
+
+Responsabilidad: indexación y búsqueda full-text local.
+
+Incluye:
+
+- `SqliteIndexService`: inicialización de esquema, indexación y rebuild.
+- `SqliteSearchService`: consultas `MATCH` sobre FTS5, ranking (`bm25`) y snippets.
+
+### SQLite FTS5
+
+El índice FTS5 permite búsquedas textuales rápidas y totalmente locales sobre chunks de documento.
+
+## 4) AppPortable.Desktop
+
+Responsabilidad: presentación y flujo de usuario en escritorio Windows.
+
+Incluye:
+
+- Aplicación WPF + MVVM.
+- `MainViewModel` con comandos para cargar PDF, buscar y reindexar.
+- Integración del pipeline de procesamiento con almacenamiento e índice locales.
+
+## 5) AppPortable.Tests
+
+Responsabilidad: validación automatizada del comportamiento actual.
+
+Cobertura principal:
+
+- extracción PDF,
+- chunking,
+- persistencia JSON,
+- indexación/búsqueda,
+- pipeline extremo a extremo.
+
+## Flujo detallado del pipeline
+
+1. `LocalStorageService` asegura estructura local y copia el PDF fuente.
+2. `PdfExtractionService` extrae texto por página.
+3. `DocumentProcessor` decide si activar fallback OCR.
+4. Se calcula `document_id` estable.
+5. `ParagraphChunkingService` genera chunks.
+6. `JsonPersistenceService` guarda documento y chunks en JSON.
+7. `SqliteIndexService` indexa chunks en FTS5.
+8. UI consulta mediante `SqliteSearchService` y muestra resultados.
+
+## Persistencia JSON
+
+Persistencia local para:
+
+- documento procesado,
+- chunks derivados.
+
+Beneficios:
+
+- trazabilidad,
+- inspección sencilla,
+- reindexación sin reprocesar PDF.
+
+## Pipeline de CI/CD (GitHub Actions)
+
+Workflow único: `.github/workflows/build.yml`.
+
+Pasos:
+
+1. `dotnet restore AppPortable.sln`
+2. `dotnet build AppPortable.sln -c Release --no-restore`
+3. `dotnet test AppPortable.Tests/AppPortable.Tests.csproj -c Release --no-build`
+4. `dotnet publish AppPortable.Desktop/AppPortable.Desktop.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true`
+5. upload de artifact de publicación para `win-x64`.
