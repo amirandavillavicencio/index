@@ -23,21 +23,19 @@ public sealed class PdfExtractionService : IPdfExtractionService
             var strategy = new SimpleTextExtractionStrategy();
             var text = PdfTextExtractor.GetTextFromPage(page, strategy)?.Trim() ?? string.Empty;
 
-            var model = new DocumentPage
+            var warnings = text.Length == 0
+                ? new[] { "No se detectó texto nativo en la página. OCR no configurado." }
+                : Array.Empty<string>();
+
+            pages.Add(new DocumentPage
             {
                 PageNumber = pageNumber,
                 Text = text,
                 TextLength = text.Length,
                 ExtractionLayer = text.Length > 0 ? ExtractionLayer.Native : ExtractionLayer.Failed,
-                OcrConfidence = null
-            };
-
-            if (text.Length == 0)
-            {
-                model.Warnings.Add("No se detectó texto nativo en la página. OCR no configurado.");
-            }
-
-            pages.Add(model);
+                OcrConfidence = null,
+                Warnings = warnings
+            });
         }
 
         return Task.FromResult<IReadOnlyList<DocumentPage>>(pages);

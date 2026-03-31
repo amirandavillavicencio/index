@@ -38,20 +38,23 @@ public sealed class SqliteIndexService(ILocalStorageService localStorageService)
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    public async Task IndexDocumentAsync(ProcessedDocument document, CancellationToken cancellationToken = default)
+    public async Task IndexChunksAsync(string documentId, IReadOnlyList<DocumentChunk> chunks, CancellationToken cancellationToken = default)
     {
         await EnsureInitializedAsync(cancellationToken);
         await using var connection = OpenConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
-        foreach (var chunk in document.Chunks)
+        foreach (var chunk in chunks)
         {
             await UpsertChunkAsync(connection, transaction, chunk, cancellationToken);
         }
 
         await transaction.CommitAsync(cancellationToken);
     }
+
+    public Task IndexDocumentAsync(ProcessedDocument document, CancellationToken cancellationToken = default)
+        => IndexChunksAsync(document.DocumentId, document.Chunks, cancellationToken);
 
     public async Task RebuildIndexAsync(IEnumerable<ProcessedDocument> documents, CancellationToken cancellationToken = default)
     {
