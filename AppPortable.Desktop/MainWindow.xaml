@@ -4,58 +4,94 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="AppPortable" Height="700" Width="1200" MinHeight="500" MinWidth="900">
+        Title="AppPortable Desktop" Height="720" Width="1280" MinHeight="540" MinWidth="960">
     <DockPanel>
         <StatusBar DockPanel.Dock="Bottom">
-            <StatusBarItem>
-                <TextBlock Text="{Binding StatusMessage}" />
+            <StatusBarItem Width="380">
+                <TextBlock Text="{Binding StatusMessage}" TextTrimming="CharacterEllipsis" />
+            </StatusBarItem>
+            <Separator />
+            <StatusBarItem Width="520">
+                <TextBlock Text="{Binding ErrorMessage}" Foreground="DarkRed" TextTrimming="CharacterEllipsis" />
             </StatusBarItem>
             <Separator />
             <StatusBarItem>
-                <TextBlock Text="{Binding IsBusy, StringFormat=Busy: {0}}" />
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Busy" Margin="0,0,8,0" />
+                    <ProgressBar Width="140" Height="14" IsIndeterminate="{Binding IsBusy}" />
+                </StackPanel>
             </StatusBarItem>
         </StatusBar>
 
         <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="280" />
-                <ColumnDefinition Width="380" />
+                <ColumnDefinition Width="300" />
+                <ColumnDefinition Width="420" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" BorderThickness="0,0,1,0" BorderBrush="#DDD" Padding="10">
+            <Border Grid.Column="0" BorderThickness="0,0,1,0" BorderBrush="#DDDDDD" Padding="12">
                 <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
-                        <Button Content="Cargar PDF" Command="{Binding LoadDocumentCommand}" Height="32" Margin="0,0,0,8"/>
-                        <Button Content="Reindexar" Command="{Binding ReindexCommand}" Height="32"/>
+                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                        <TextBlock Text="Documentos" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8" />
+                        <Button Content="Cargar PDF" Command="{Binding LoadDocumentCommand}" Height="34" />
                     </StackPanel>
 
-                    <ListBox ItemsSource="{Binding Documents}" SelectedItem="{Binding SelectedDocument}" DisplayMemberPath="Title"/>
+                    <ListBox ItemsSource="{Binding Documents}" SelectedItem="{Binding SelectedDocument}" DisplayMemberPath="Title" />
                 </DockPanel>
             </Border>
 
-            <Border Grid.Column="1" BorderThickness="0,0,1,0" BorderBrush="#DDD" Padding="10">
+            <Border Grid.Column="1" BorderThickness="0,0,1,0" BorderBrush="#DDDDDD" Padding="12">
                 <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
-                        <TextBox Width="250" Height="28" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0"/>
-                        <Button Content="Buscar" Width="90" Height="28" Command="{Binding SearchCommand}"/>
+                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                        <TextBlock Text="Búsqueda" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBox Grid.Column="0"
+                                     Height="32"
+                                     Margin="0,0,8,0"
+                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Grid.Column="1"
+                                    Content="Buscar"
+                                    Height="32"
+                                    Width="92"
+                                    Margin="0,0,8,0"
+                                    Command="{Binding SearchCommand}" />
+                            <Button Grid.Column="2"
+                                    Content="Reindexar"
+                                    Height="32"
+                                    Width="98"
+                                    Command="{Binding ReindexCommand}" />
+                        </Grid>
                     </StackPanel>
 
                     <ListView ItemsSource="{Binding SearchResults}" SelectedItem="{Binding SelectedResult}">
                         <ListView.View>
                             <GridView>
-                                <GridViewColumn Header="Documento" DisplayMemberBinding="{Binding DocumentId}" Width="130"/>
-                                <GridViewColumn Header="Páginas" DisplayMemberBinding="{Binding PageStart}" Width="60"/>
-                                <GridViewColumn Header="Score" DisplayMemberBinding="{Binding Score}" Width="70"/>
-                                <GridViewColumn Header="Snippet" DisplayMemberBinding="{Binding Snippet}" Width="300"/>
+                                <GridViewColumn Header="Documento" DisplayMemberBinding="{Binding DocumentId}" Width="130" />
+                                <GridViewColumn Header="Pág." DisplayMemberBinding="{Binding PageStart}" Width="50" />
+                                <GridViewColumn Header="Score" DisplayMemberBinding="{Binding Score, StringFormat=F4}" Width="60" />
+                                <GridViewColumn Header="Snippet" DisplayMemberBinding="{Binding Snippet}" Width="300" />
                             </GridView>
                         </ListView.View>
                     </ListView>
                 </DockPanel>
             </Border>
 
-            <Border Grid.Column="2" Padding="10">
-                <TextBox Text="{Binding SelectedDetail}" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AcceptsReturn="True" IsReadOnly="True"/>
+            <Border Grid.Column="2" Padding="12">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Detalle" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8" />
+                    <TextBox Text="{Binding SelectedDetail}"
+                             AcceptsReturn="True"
+                             IsReadOnly="True"
+                             TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto" />
+                </DockPanel>
             </Border>
         </Grid>
     </DockPanel>
