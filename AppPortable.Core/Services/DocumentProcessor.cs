@@ -9,42 +9,63 @@ namespace AppPortable.Core.Services;
 public sealed class DocumentProcessor(
     ILocalStorageService localStorageService,
     IPdfExtractionService pdfExtractionService,
+    IOcrService ocrService,
     IChunkingService chunkingService,
     IJsonPersistenceService jsonPersistenceService,
     IIndexService indexService) : IDocumentProcessor
 {
-    public async Task<ProcessedDocument> ProcessAsync(string sourcePdfPath, CancellationToken cancellationToken = default)
+    public async Task<ProcessedDocument> ProcessAsync(string sourcePdfPath, bool enableOcrFallback = true, CancellationToken cancellationToken = default)
     {
         localStorageService.EnsureInitialized();
         await indexService.EnsureInitializedAsync(cancellationToken);
 
         var copiedSourcePath = await localStorageService.CopySourceDocumentAsync(sourcePdfPath, cancellationToken);
-        var pages = await pdfExtractionService.ExtractPagesAsync(copiedSourcePath, cancellationToken);
+        var extractedPages = await pdfExtractionService.ExtractPagesAsync(copiedSourcePath, cancellationToken);
+        var pages = await ApplyOcrFallbackAsync(copiedSourcePath, extractedPages, enableOcrFallback, cancellationToken);
+
         var documentId = ComputeDocumentId(copiedSourcePath, pages);
+        var chunks = chunkingService.CreateChunks(documentId, copiedSourcePath, pages);
 
         var processedDocument = new ProcessedDocument
         {
             DocumentId = documentId,
             SourceFile = copiedSourcePath,
-            ProcessedAt = DateTimeOffset.UtcNow,
+            ProcessedAt = DateTime.UtcNow,
             TotalPages = pages.Count,
-            Pages = pages.ToList(),
+            Pages = pages,
+            Chunks = chunks,
             ExtractionSummary = BuildSummary(pages),
             Warnings = BuildWarnings(pages)
         };
 
-        processedDocument.Chunks = chunkingService
-            .CreateChunks(documentId, copiedSourcePath, pages)
-            .ToList();
-
         var documentJsonPath = localStorageService.GetDocumentJsonPath(documentId);
         var chunksJsonPath = localStorageService.GetChunksJsonPath(documentId);
 
-        await jsonPersistenceService.SaveAsync(documentJsonPath, processedDocument, cancellationToken);
-        await jsonPersistenceService.SaveAsync(chunksJsonPath, processedDocument.Chunks, cancellationToken);
-        await indexService.IndexDocumentAsync(processedDocument, cancellationToken);
+        await jsonPersistenceService.SaveDocumentAsync(documentJsonPath, processedDocument, cancellationToken);
+        await jsonPersistenceService.SaveChunksAsync(chunksJsonPath, processedDocument.Chunks, cancellationToken);
+        await indexService.IndexChunksAsync(documentId, processedDocument.Chunks, cancellationToken);
 
         return processedDocument;
+    }
+
+    private async Task<IReadOnlyList<DocumentPage>> ApplyOcrFallbackAsync(
+        string sourcePdfPath,
+        IReadOnlyList<DocumentPage> pages,
+        bool enableOcrFallback,
+        CancellationToken cancellationToken)
+    {
+        if (!enableOcrFallback || !ocrService.IsAvailable)
+        {
+            return pages;
+        }
+
+        var requiresOcr = pages.Any(static p => p.ExtractionLayer is ExtractionLayer.Failed || p.TextLength == 0);
+        if (!requiresOcr)
+        {
+            return pages;
+        }
+
+        return await ocrService.ApplyOcrAsync(sourcePdfPath, pages, cancellationToken);
     }
 
     private static string ComputeDocumentId(string sourcePath, IReadOnlyList<DocumentPage> pages)
@@ -59,17 +80,17 @@ public sealed class DocumentProcessor(
         return new ExtractionSummary
         {
             Native = pages.Count(p => p.ExtractionLayer == ExtractionLayer.Native),
-            Ocr = pages.Count(p => p.ExtractionLayer == ExtractionLayer.Ocr || p.ExtractionLayer == ExtractionLayer.Mixed),
+            Ocr = pages.Count(p => p.ExtractionLayer is ExtractionLayer.Ocr or ExtractionLayer.Mixed),
             Failed = pages.Count(p => p.ExtractionLayer == ExtractionLayer.Failed)
         };
     }
 
-    private static List<string> BuildWarnings(IReadOnlyList<DocumentPage> pages)
+    private static IReadOnlyList<string> BuildWarnings(IReadOnlyList<DocumentPage> pages)
     {
         return pages
             .Where(p => p.Warnings.Count > 0)
             .SelectMany(p => p.Warnings.Select(w => $"Page {p.PageNumber}: {w}"))
             .Distinct()
-            .ToList();
+            .ToArray();
     }
 }

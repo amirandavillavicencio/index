@@ -4,10 +4,10 @@ namespace AppPortable.Core.Models;
 
 public sealed class DocumentPage
 {
-    public int PageNumber { get; set; }
-    public ExtractionLayer ExtractionLayer { get; set; }
-    public double? OcrConfidence { get; set; }
-    public string Text { get; set; } = string.Empty;
-    public int TextLength { get; set; }
-    public List<string> Warnings { get; set; } = [];
+    public int PageNumber { get; init; }
+    public ExtractionLayer ExtractionLayer { get; init; }
+    public double? OcrConfidence { get; init; }
+    public string Text { get; init; } = string.Empty;
+    public int TextLength { get; init; }
+    public IReadOnlyList<string> Warnings { get; init; } = [];
 }

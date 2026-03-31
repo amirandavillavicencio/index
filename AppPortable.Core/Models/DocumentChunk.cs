@@ -1,15 +1,17 @@
+using AppPortable.Core.Enums;
+
 namespace AppPortable.Core.Models;
 
 public sealed class DocumentChunk
 {
-    public string ChunkId { get; set; } = string.Empty;
-    public string DocumentId { get; set; } = string.Empty;
-    public string SourceFile { get; set; } = string.Empty;
-    public int PageStart { get; set; }
-    public int PageEnd { get; set; }
-    public int ChunkIndex { get; set; }
-    public string Text { get; set; } = string.Empty;
-    public int TextLength { get; set; }
-    public List<string> ExtractionLayersInvolved { get; set; } = [];
-    public Dictionary<string, string> Metadata { get; set; } = [];
+    public string ChunkId { get; init; } = string.Empty;
+    public string DocumentId { get; init; } = string.Empty;
+    public string SourceFile { get; init; } = string.Empty;
+    public int PageStart { get; init; }
+    public int PageEnd { get; init; }
+    public int ChunkIndex { get; init; }
+    public string Text { get; init; } = string.Empty;
+    public int TextLength { get; init; }
+    public IReadOnlyList<ExtractionLayer> ExtractionLayersInvolved { get; init; } = [];
+    public IReadOnlyDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
 }
