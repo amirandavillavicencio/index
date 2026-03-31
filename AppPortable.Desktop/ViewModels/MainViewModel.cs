@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using System.Windows;
 using AppPortable.Core.Interfaces;
 using AppPortable.Core.Models;
 using AppPortable.Desktop.Commands;
@@ -22,6 +21,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     private string _searchText = string.Empty;
     private string _statusMessage = "Listo";
+    private string _errorMessage = string.Empty;
     private string _selectedDetail = "Seleccione un documento o resultado";
     private bool _isBusy;
     private DocumentListItem? _selectedDocument;
@@ -77,6 +77,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
         private set => SetProperty(ref _statusMessage, value);
     }
 
+    public string ErrorMessage
+    {
+        get => _errorMessage;
+        private set => SetProperty(ref _errorMessage, value);
+    }
+
     public string SelectedDetail
     {
         get => _selectedDetail;
@@ -102,17 +108,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
         get => _selectedDocument;
         set
         {
-            if (SetProperty(ref _selectedDocument, value) && value is not null)
+            if (!SetProperty(ref _selectedDocument, value) || value is null)
             {
-                SelectedResult = null;
-                SelectedDetail = $"Documento: {value.Document.DocumentId}\n" +
-                                 $"Archivo: {value.Document.SourceFile}\n" +
-                                 $"Páginas: {value.Document.TotalPages}\n" +
-                                 $"Chunks: {value.Document.Chunks.Count}\n" +
-                                 $"Native: {value.Document.ExtractionSummary.Native}, " +
-                                 $"OCR: {value.Document.ExtractionSummary.Ocr}, " +
-                                 $"Failed: {value.Document.ExtractionSummary.Failed}";
+                return;
             }
+
+            SelectedResult = null;
+            SelectedDetail = BuildDocumentDetail(value.Document);
         }
     }
 
@@ -121,15 +123,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
         get => _selectedResult;
         set
         {
-            if (SetProperty(ref _selectedResult, value) && value is not null)
+            if (!SetProperty(ref _selectedResult, value) || value is null)
             {
-                SelectedDetail = $"Chunk: {value.ChunkId}\n" +
-                                 $"Documento: {value.DocumentId}\n" +
-                                 $"Páginas: {value.PageStart}-{value.PageEnd}\n" +
-                                 $"Score: {value.Score:F4}\n\n" +
-                                 $"Snippet:\n{value.Snippet}\n\n" +
-                                 $"Texto:\n{value.ChunkText}";
+                return;
             }
+
+            SelectedDetail = BuildResultDetail(value);
         }
     }
 
@@ -137,24 +136,36 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         try
         {
+            SetStatus("Inicializando...");
             await _indexService.EnsureInitializedAsync();
             Documents.Clear();
 
-            foreach (var jsonFile in Directory.EnumerateFiles(_storageService.JsonPath, "*.json").OrderByDescending(f => f))
+            var docs = new List<ProcessedDocument>();
+            foreach (var jsonFile in Directory.EnumerateFiles(_storageService.JsonPath, "*.json"))
             {
                 var doc = await _jsonPersistenceService.LoadDocumentAsync(jsonFile);
                 if (doc is not null)
                 {
-                    Documents.Add(new DocumentListItem { Document = doc });
+                    docs.Add(doc);
                 }
             }
 
-            StatusMessage = $"Documentos cargados: {Documents.Count}";
+            foreach (var document in docs.OrderByDescending(d => d.ProcessedAt))
+            {
+                Documents.Add(new DocumentListItem { Document = document });
+            }
+
+            if (Documents.Count > 0)
+            {
+                SelectedDocument = Documents[0];
+            }
+
+            SetStatus($"Documentos cargados: {Documents.Count}");
             ReindexCommand.RaiseCanExecuteChanged();
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Error al cargar documentos: {ex.Message}";
+            SetError($"Error al cargar documentos persistidos: {ex.Message}");
         }
     }
 
@@ -175,19 +186,19 @@ public sealed class MainViewModel : INotifyPropertyChanged
         try
         {
             IsBusy = true;
-            StatusMessage = "Procesando documento...";
+            SetStatus("Procesando PDF...");
 
             var document = await _documentProcessor.ProcessAsync(dialog.FileName);
-            Documents.Insert(0, new DocumentListItem { Document = document });
-            SelectedDocument = Documents[0];
+            var item = new DocumentListItem { Document = document };
+            Documents.Insert(0, item);
+            SelectedDocument = item;
 
-            StatusMessage = $"Documento procesado: {document.DocumentId}";
+            SetStatus($"Documento procesado: {document.DocumentId}");
             ReindexCommand.RaiseCanExecuteChanged();
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Error procesando documento: {ex.Message}";
-            MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            SetError($"Error procesando documento: {ex.Message}");
         }
         finally
         {
@@ -200,7 +211,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         try
         {
             IsBusy = true;
-            StatusMessage = "Buscando...";
+            SetStatus($"Buscando: '{SearchText.Trim()}'...");
 
             var results = await _searchService.SearchAsync(SearchText.Trim(), 100);
             SearchResults.Clear();
@@ -209,15 +220,20 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 SearchResults.Add(result);
             }
 
-            StatusMessage = $"Resultados: {SearchResults.Count}";
             if (SearchResults.Count > 0)
             {
                 SelectedResult = SearchResults[0];
+                SetStatus($"Resultados encontrados: {SearchResults.Count}");
+            }
+            else
+            {
+                SelectedResult = null;
+                SetStatus("Sin resultados para la consulta.");
             }
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Error en búsqueda: {ex.Message}";
+            SetError($"Error en búsqueda: {ex.Message}");
         }
         finally
         {
@@ -230,18 +246,66 @@ public sealed class MainViewModel : INotifyPropertyChanged
         try
         {
             IsBusy = true;
-            StatusMessage = "Reindexando...";
+            SetStatus("Reindexando documentos...");
+
             await _indexService.RebuildIndexAsync(Documents.Select(d => d.Document));
-            StatusMessage = "Reindexación completada";
+
+            SetStatus($"Reindexación completada ({Documents.Count} documentos).");
+            if (!string.IsNullOrWhiteSpace(SearchText))
+            {
+                await SearchAsync();
+            }
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Error reindexando: {ex.Message}";
+            SetError($"Error reindexando: {ex.Message}");
         }
         finally
         {
             IsBusy = false;
         }
+    }
+
+    private void SetStatus(string status)
+    {
+        ErrorMessage = string.Empty;
+        StatusMessage = status;
+    }
+
+    private void SetError(string error)
+    {
+        ErrorMessage = error;
+        StatusMessage = "Error";
+    }
+
+    private static string BuildDocumentDetail(ProcessedDocument document)
+    {
+        var warnings = document.Warnings.Count == 0
+            ? "(sin warnings)"
+            : string.Join(Environment.NewLine, document.Warnings.Select(w => $"- {w}"));
+
+        return $"Documento seleccionado{Environment.NewLine}" +
+               $"Archivo: {document.SourceFile}{Environment.NewLine}" +
+               $"Document ID: {document.DocumentId}{Environment.NewLine}" +
+               $"Páginas: {document.TotalPages}{Environment.NewLine}" +
+               $"Procesado: {document.ProcessedAt:yyyy-MM-dd HH:mm:ss}{Environment.NewLine}" +
+               $"Extraction summary: Native={document.ExtractionSummary.Native}, OCR={document.ExtractionSummary.Ocr}, Failed={document.ExtractionSummary.Failed}{Environment.NewLine}" +
+               $"Chunks: {document.Chunks.Count}{Environment.NewLine}" +
+               $"Warnings:{Environment.NewLine}{warnings}";
+    }
+
+    private static string BuildResultDetail(SearchResult result)
+    {
+        var text = string.IsNullOrWhiteSpace(result.ChunkText) ? "(sin texto de chunk)" : result.ChunkText;
+
+        return $"Resultado seleccionado{Environment.NewLine}" +
+               $"Archivo: {result.SourceFile}{Environment.NewLine}" +
+               $"Document ID: {result.DocumentId}{Environment.NewLine}" +
+               $"Chunk ID: {result.ChunkId}{Environment.NewLine}" +
+               $"Páginas: {result.PageStart}-{result.PageEnd}{Environment.NewLine}" +
+               $"Score: {result.Score:F4}{Environment.NewLine}" +
+               $"Snippet:{Environment.NewLine}{result.Snippet}{Environment.NewLine}{Environment.NewLine}" +
+               $"Texto del chunk:{Environment.NewLine}{text}";
     }
 
     private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
