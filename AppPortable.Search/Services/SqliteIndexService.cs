@@ -47,7 +47,7 @@ public sealed class SqliteIndexService(ILocalStorageService localStorageService)
 
         await using var connection = OpenConnection();
         await connection.OpenAsync(cancellationToken);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
 
         await DeleteDocumentChunksAsync(connection, transaction, documentId, cancellationToken);
 
@@ -68,7 +68,7 @@ public sealed class SqliteIndexService(ILocalStorageService localStorageService)
 
         await using var connection = OpenConnection();
         await connection.OpenAsync(cancellationToken);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
 
         await ClearAllAsync(connection, transaction, cancellationToken);
 
