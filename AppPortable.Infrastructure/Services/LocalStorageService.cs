@@ -32,7 +32,10 @@ public sealed class LocalStorageService : ILocalStorageService
 
     public async Task<string> CopySourceDocumentAsync(string sourcePdfPath, CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourcePdfPath);
+
         EnsureInitialized();
+
         var extension = Path.GetExtension(sourcePdfPath);
         var destinationFileName = $"{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{extension}";
         var destinationPath = Path.Combine(DocumentsPath, destinationFileName);
@@ -44,7 +47,37 @@ public sealed class LocalStorageService : ILocalStorageService
         return destinationPath;
     }
 
-    public string GetDocumentJsonPath(string documentId) => Path.Combine(JsonPath, $"{documentId}.json");
+    public string GetDocumentJsonPath(string documentId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
+        EnsureInitialized();
+        return Path.Combine(JsonPath, $"{documentId}.json");
+    }
 
-    public string GetChunksJsonPath(string documentId) => Path.Combine(ChunksPath, $"{documentId}.chunks.json");
+    public string GetChunksJsonPath(string documentId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
+        EnsureInitialized();
+        return Path.Combine(ChunksPath, $"{documentId}.chunks.json");
+    }
+
+    public string GetIndexPath(string indexName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(indexName);
+        EnsureInitialized();
+        return Path.Combine(IndexPath, indexName);
+    }
+
+    public string GetTempFilePath(string fileName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+        EnsureInitialized();
+        return Path.Combine(TempPath, fileName);
+    }
+
+    public string GetLogFilePath(DateTime dateUtc)
+    {
+        EnsureInitialized();
+        return Path.Combine(LogsPath, $"appportable-{dateUtc:yyyyMMdd}.log");
+    }
 }
