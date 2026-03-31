@@ -47,4 +47,10 @@ public sealed class LocalStorageService : ILocalStorageService
     public string GetDocumentJsonPath(string documentId) => Path.Combine(JsonPath, $"{documentId}.json");
 
     public string GetChunksJsonPath(string documentId) => Path.Combine(ChunksPath, $"{documentId}.chunks.json");
+
+    public string GetIndexPath(string indexName) => Path.Combine(IndexPath, indexName);
+
+    public string GetTempFilePath(string fileName) => Path.Combine(TempPath, fileName);
+
+    public string GetLogFilePath(DateTime dateUtc) => Path.Combine(LogsPath, $"{dateUtc:yyyyMMdd}.log");
 }
