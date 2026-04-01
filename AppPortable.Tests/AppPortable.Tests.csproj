@@ -1,7 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
-    <IsPackable>false</IsPackable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsTestProject>true</IsTestProject>
   </PropertyGroup>
 
   <ItemGroup>
@@ -11,7 +14,6 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="itext7" Version="8.0.5" />
   </ItemGroup>
 
   <ItemGroup>
@@ -19,4 +21,5 @@
     <ProjectReference Include="..\AppPortable.Infrastructure\AppPortable.Infrastructure.csproj" />
     <ProjectReference Include="..\AppPortable.Search\AppPortable.Search.csproj" />
   </ItemGroup>
+
 </Project>
