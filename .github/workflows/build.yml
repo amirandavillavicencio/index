@@ -13,10 +13,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET 8
+      - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: 8.0.x
 
       - name: Restore
         run: dotnet restore AppPortable.sln
@@ -25,14 +25,4 @@ jobs:
         run: dotnet build AppPortable.sln -c Release --no-restore
 
       - name: Test
-        run: dotnet test AppPortable.Tests/AppPortable.Tests.csproj -c Release --no-build --no-restore
-
-      - name: Publish
-        run: dotnet publish AppPortable.Desktop/AppPortable.Desktop.csproj -c Release -f net8.0-windows -r win-x64 --self-contained true --no-restore --no-build /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o AppPortable.Desktop/bin/Release/net8.0-windows/win-x64/publish/
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: appportable-win-x64
-          path: AppPortable.Desktop/bin/Release/net8.0-windows/win-x64/publish/
-          if-no-files-found: error
+        run: dotnet test AppPortable.sln -c Release --no-build --verbosity normal
