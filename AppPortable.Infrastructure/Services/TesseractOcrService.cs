@@ -49,7 +49,7 @@ public sealed class TesseractOcrService : IOcrService
         {
             await RenderPageToPngAsync(sourcePdfPath, page.PageNumber - 1, tempPng, cancellationToken);
 
-            var ocrText = (await RunTesseractToFileAsync(
+            var ocrText = (await RunTesseractToFileWithFallbackAsync(
                 tesseractPath,
                 tempPng,
                 tempBase,
@@ -138,16 +138,33 @@ public sealed class TesseractOcrService : IOcrService
         }, ct);
     }
 
-    private static async Task<string> RunTesseractToFileAsync(
+    private static async Task<string> RunTesseractToFileWithFallbackAsync(
         string tesseractPath,
         string imagePath,
         string outputBasePath,
         CancellationToken ct)
     {
+        try
+        {
+            return await RunTesseractToFileAsync(tesseractPath, imagePath, outputBasePath, "spa", ct);
+        }
+        catch (InvalidOperationException)
+        {
+            return await RunTesseractToFileAsync(tesseractPath, imagePath, outputBasePath, "eng", ct);
+        }
+    }
+
+    private static async Task<string> RunTesseractToFileAsync(
+        string tesseractPath,
+        string imagePath,
+        string outputBasePath,
+        string language,
+        CancellationToken ct)
+    {
         var psi = new ProcessStartInfo
         {
             FileName = tesseractPath,
-            Arguments = $"\"{imagePath}\" \"{outputBasePath}\" -l spa",
+            Arguments = $"\"{imagePath}\" \"{outputBasePath}\" -l {language}",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             StandardOutputEncoding = Encoding.UTF8,
