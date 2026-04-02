@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text;
 using AppPortable.Core.Enums;
 using AppPortable.Core.Interfaces;
@@ -23,33 +23,28 @@ public sealed class InfrastructureDocumentProcessor(
         await indexService.EnsureInitializedAsync(cancellationToken);
 
         var copiedSourcePath = await localStorageService.CopySourceDocumentAsync(sourcePdfPath, cancellationToken);
-        var extractedPages = await pdfExtractionService.ExtractPagesAsync(copiedSourcePath, cancellationToken);
+        var extractedPages   = await pdfExtractionService.ExtractPagesAsync(copiedSourcePath, cancellationToken);
 
-        IReadOnlyList<DocumentPage> pages = extractedPages;
-
-        // OCR SIEMPRE sobre todas las páginas
-        if (enableOcrFallback && ocrService.IsAvailable)
-        {
-            pages = await ocrService.ApplyOcrAsync(copiedSourcePath, extractedPages, cancellationToken);
-        }
+        // OCR SIEMPRE — sin condiciones
+        var pages = await ocrService.ApplyOcrAsync(copiedSourcePath, extractedPages, cancellationToken);
 
         var documentId = ComputeDocumentId(copiedSourcePath, pages);
-        var chunks = chunkingService.CreateChunks(documentId, copiedSourcePath, pages);
+        var chunks     = chunkingService.CreateChunks(documentId, copiedSourcePath, pages);
 
         var processedDocument = new ProcessedDocument
         {
-            DocumentId = documentId,
-            SourceFile = copiedSourcePath,
-            ProcessedAt = DateTime.UtcNow,
-            TotalPages = pages.Count,
-            Pages = pages,
-            Chunks = chunks,
+            DocumentId        = documentId,
+            SourceFile        = copiedSourcePath,
+            ProcessedAt       = DateTime.UtcNow,
+            TotalPages        = pages.Count,
+            Pages             = pages,
+            Chunks            = chunks,
             ExtractionSummary = BuildSummary(pages),
-            Warnings = BuildWarnings(pages)
+            Warnings          = BuildWarnings(pages)
         };
 
         var documentJsonPath = localStorageService.GetDocumentJsonPath(documentId);
-        var chunksJsonPath = localStorageService.GetChunksJsonPath(documentId);
+        var chunksJsonPath   = localStorageService.GetChunksJsonPath(documentId);
 
         await jsonPersistenceService.SaveDocumentAsync(documentJsonPath, processedDocument, cancellationToken);
         await jsonPersistenceService.SaveChunksAsync(chunksJsonPath, processedDocument.Chunks, cancellationToken);
@@ -61,7 +56,7 @@ public sealed class InfrastructureDocumentProcessor(
     private static string ComputeDocumentId(string sourcePath, IReadOnlyList<DocumentPage> pages)
     {
         var payload = $"{Path.GetFileName(sourcePath)}|{new FileInfo(sourcePath).Length}|{pages.Count}|{pages.Sum(p => p.TextLength)}";
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
+        var hash    = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
         return Convert.ToHexString(hash).ToLowerInvariant()[..24];
     }
 
@@ -69,7 +64,7 @@ public sealed class InfrastructureDocumentProcessor(
         new()
         {
             Native = pages.Count(p => p.ExtractionLayer == ExtractionLayer.Native),
-            Ocr = pages.Count(p => p.ExtractionLayer is ExtractionLayer.Ocr or ExtractionLayer.Mixed),
+            Ocr    = pages.Count(p => p.ExtractionLayer is ExtractionLayer.Ocr or ExtractionLayer.Mixed),
             Failed = pages.Count(p => p.ExtractionLayer == ExtractionLayer.Failed)
         };
 

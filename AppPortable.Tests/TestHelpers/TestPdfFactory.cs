@@ -1,6 +1,7 @@
 using iText.Kernel.Pdf;
 using iText.Layout;
 using iText.Layout.Element;
+using iText.Layout.Properties;
 
 namespace AppPortable.Tests.TestHelpers;
 
@@ -16,17 +17,14 @@ internal static class TestPdfFactory
         for (var i = 0; i < pageTexts.Length; i++)
         {
             if (i > 0)
-            {
-                document.Add(new AreaBreak());
-            }
+                document.Add(new AreaBreak(AreaBreakType.NEXT_PAGE));
 
-            if (!string.IsNullOrWhiteSpace(pageTexts[i]))
-            {
-                document.Add(new Paragraph(pageTexts[i]));
-            }
+            // ✅ Siempre agregar algo — página vacía causa NullRef en Flush
+            var content = string.IsNullOrWhiteSpace(pageTexts[i]) ? " " : pageTexts[i];
+            document.Add(new Paragraph(content));
         }
 
-        document.Flush();
+        // ✅ Eliminar document.Flush() — el using lo maneja automáticamente
         return path;
     }
 }
