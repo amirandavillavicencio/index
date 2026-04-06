@@ -1,28 +1,34 @@
-export type DocumentChunk = {
-  chunkId: string;
-  documentId: string;
-  sourceFile: string;
-  pageStart: number;
-  pageEnd: number;
-  chunkIndex: number;
-  text: string;
-  textLength: number;
-};
+export type JobStatus = 'queued' | 'processing' | 'completed' | 'failed';
 
-export type ProcessedDocument = {
+export interface ProcessJob {
+  id: string;
   documentId: string;
-  fileName: string;
+  filename: string;
+  blobUrl: string;
+  status: JobStatus;
+  createdAt: string;
+  updatedAt: string;
   totalPages: number;
-  processedAt: string;
-  chunks: DocumentChunk[];
-};
+  processedPages: number;
+  chunkCount: number;
+  error?: string;
+  ocrMode: 'none' | 'partial' | 'full';
+}
 
-export type SearchResult = {
-  chunkId: string;
+export interface DocumentChunk {
+  id: string;
   documentId: string;
-  sourceFile: string;
-  pageStart: number;
-  pageEnd: number;
+  pageFrom: number;
+  pageTo: number;
+  text: string;
+  terms: string[];
+}
+
+export interface SearchResult {
+  documentId: string;
+  chunkId: string;
+  pageFrom: number;
+  pageTo: number;
   score: number;
   snippet: string;
-};
+}

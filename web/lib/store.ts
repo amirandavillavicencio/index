@@ -1,58 +1,84 @@
-import type { ProcessedDocument, SearchResult } from './types';
+import { put } from '@vercel/blob';
+import { kv } from '@vercel/kv';
+import { MAX_POLL_DOCS } from './limits';
+import type { DocumentChunk, ProcessJob, SearchResult } from './types';
 
-type InMemoryStore = {
-  documents: Map<string, ProcessedDocument>;
-};
+const jobKey = (jobId: string) => `job:${jobId}`;
+const docChunksKey = (documentId: string) => `doc:${documentId}:chunks`;
+const docJobsKey = 'jobs:index';
 
-const globalState = globalThis as typeof globalThis & { __appPortableStore?: InMemoryStore };
+export async function savePdfToBlob(documentId: string, file: File) {
+  const pathname = `pdf/${documentId}/${file.name}`;
+  return put(pathname, file, { access: 'private', addRandomSuffix: true });
+}
 
-if (!globalState.__appPortableStore) {
-  globalState.__appPortableStore = {
-    documents: new Map<string, ProcessedDocument>()
+export async function createJob(job: ProcessJob) {
+  await kv.set(jobKey(job.id), job);
+  await kv.zadd(docJobsKey, { score: Date.now(), member: job.id });
+}
+
+export async function getJob(jobId: string) {
+  return kv.get<ProcessJob>(jobKey(jobId));
+}
+
+export async function updateJob(jobId: string, patch: Partial<ProcessJob>) {
+  const existing = await getJob(jobId);
+  if (!existing) return null;
+
+  const next: ProcessJob = {
+    ...existing,
+    ...patch,
+    updatedAt: new Date().toISOString(),
   };
+
+  await kv.set(jobKey(jobId), next);
+  return next;
 }
 
-const store = globalState.__appPortableStore;
-
-export function saveDocument(document: ProcessedDocument): void {
-  store.documents.set(document.documentId, document);
+export async function appendChunks(documentId: string, chunks: DocumentChunk[]) {
+  if (!chunks.length) return;
+  await kv.rpush(docChunksKey(documentId), ...chunks.map((item) => JSON.stringify(item)));
 }
 
-export function listDocuments(): ProcessedDocument[] {
-  return Array.from(store.documents.values());
+export async function getChunks(documentId: string) {
+  const raw = await kv.lrange<string[]>(docChunksKey(documentId), 0, -1);
+  return raw.map((item) => JSON.parse(item) as DocumentChunk);
 }
 
-export function searchDocuments(query: string, limit = 50): SearchResult[] {
-  const q = query.trim().toLocaleLowerCase();
-  if (!q) {
-    return [];
-  }
+export async function listJobs(limit = MAX_POLL_DOCS) {
+  const ids = await kv.zrange<string[]>(docJobsKey, -limit, -1, { rev: true });
+  if (!ids.length) return [];
 
+  const rows = await kv.mget<ProcessJob[]>(...ids.map((id) => jobKey(id)));
+  return rows.filter(Boolean);
+}
+
+export async function searchChunks(query: string, limit = 20): Promise<SearchResult[]> {
+  const jobs = await listJobs();
+  const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
   const results: SearchResult[] = [];
 
-  for (const document of store.documents.values()) {
-    for (const chunk of document.chunks) {
-      const text = chunk.text.toLocaleLowerCase();
-      const idx = text.indexOf(q);
-      if (idx < 0) {
-        continue;
-      }
+  for (const job of jobs.filter((item) => item.status === 'completed')) {
+    const chunks = await getChunks(job.documentId);
+    for (const chunk of chunks) {
+      const haystack = `${chunk.text} ${chunk.terms.join(' ')}`.toLowerCase();
+      const matched = tokens.filter((token) => haystack.includes(token)).length;
+      if (!matched) continue;
 
-      const snippetStart = Math.max(0, idx - 60);
-      const snippetEnd = Math.min(chunk.text.length, idx + q.length + 120);
-      const snippet = chunk.text.slice(snippetStart, snippetEnd).replace(/\s+/g, ' ').trim();
+      const idx = haystack.indexOf(tokens[0] ?? '');
+      const from = Math.max(0, idx - 80);
+      const to = Math.min(chunk.text.length, idx + 200);
 
       results.push({
-        chunkId: chunk.chunkId,
         documentId: chunk.documentId,
-        sourceFile: chunk.sourceFile,
-        pageStart: chunk.pageStart,
-        pageEnd: chunk.pageEnd,
-        score: idx,
-        snippet
+        chunkId: chunk.id,
+        pageFrom: chunk.pageFrom,
+        pageTo: chunk.pageTo,
+        score: matched / Math.max(tokens.length, 1),
+        snippet: chunk.text.slice(from, to),
       });
     }
   }
 
-  return results.sort((a, b) => a.score - b.score).slice(0, limit);
+  return results.sort((a, b) => b.score - a.score).slice(0, limit);
 }

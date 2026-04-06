@@ -1,25 +1,17 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
-import { searchDocuments } from '@/lib/store';
+import { searchChunks } from '@/lib/store';
 
 export const runtime = 'nodejs';
+export const maxDuration = 5;
 
-const searchSchema = z.object({
-  query: z.string().min(1),
-  limit: z.number().int().positive().max(200).optional()
-});
+export async function POST(request: Request) {
+  const body = (await request.json()) as { query?: string; limit?: number };
+  const query = body.query?.trim();
 
-export async function POST(request: Request): Promise<NextResponse> {
-  const payload = searchSchema.safeParse(await request.json());
-  if (!payload.success) {
-    return NextResponse.json({ error: 'Payload inválido.' }, { status: 400 });
+  if (!query) {
+    return NextResponse.json({ error: 'query is required' }, { status: 400 });
   }
 
-  const { query, limit = 50 } = payload.data;
-  const results = searchDocuments(query, limit);
-
-  return NextResponse.json({
-    total: results.length,
-    results
-  });
+  const results = await searchChunks(query, body.limit ?? 20);
+  return NextResponse.json({ query, total: results.length, results });
 }
