@@ -31,6 +31,7 @@ Flujo principal actual:
 - `AppPortable.Infrastructure`: servicios de extracción PDF, OCR fallback, storage local y persistencia JSON.
 - `AppPortable.Search`: indexación y consulta sobre SQLite FTS5.
 - `AppPortable.Desktop`: aplicación WPF/MVVM.
+- `AppPortable.Web`: base web mínima (ASP.NET Core) reutilizando servicios existentes.
 - `AppPortable.Tests`: pruebas de pipeline, extracción, chunking, persistencia e índice.
 
 Más detalle: `docs/ARCHITECTURE.md`.
@@ -70,6 +71,18 @@ Uso en UI:
 3. Escribir consulta en caja de búsqueda.
 4. Revisar resultados y detalle.
 
+## Uso rápido (web mínima)
+
+```bash
+dotnet run --project AppPortable.Web/AppPortable.Web.csproj
+```
+
+Luego abrir la raíz de la app web para probar el flujo:
+
+1. Subir PDF.
+2. Procesar/indexar.
+3. Buscar.
+
 ## Estructura de carpetas
 
 ```text
@@ -78,6 +91,7 @@ Uso en UI:
 ├─ AppPortable.Infrastructure/
 ├─ AppPortable.Search/
 ├─ AppPortable.Desktop/
+├─ AppPortable.Web/
 ├─ AppPortable.Tests/
 ├─ .github/workflows/build.yml
 └─ docs/
