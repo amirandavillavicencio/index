@@ -19,3 +19,7 @@ coverage/
 # OS
 .DS_Store
 Thumbs.db
+
+# Web (Next.js)
+web/node_modules/
+web/.next/
