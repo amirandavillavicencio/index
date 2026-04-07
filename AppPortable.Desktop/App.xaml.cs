@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using AppPortable.Infrastructure.Services;
 using AppPortable.Search.Services;
@@ -8,15 +9,16 @@ namespace AppPortable.Desktop;
 
 public partial class App : Application
 {
+    private const string PortableDataFolderName = "data";
+    private const string LocalDataFolderName = "Gabriela";
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
-        EnsureTesseractInPath();
+        ConfigurePortableRuntimePaths();
 
-        var basePath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "AppPortable");
+        var basePath = ResolveStoragePath();
 
         var localStorageService = new LocalStorageService(basePath);
         var pdfExtractionService = new PdfExtractionService();
@@ -40,10 +42,45 @@ public partial class App : Application
         mainWindow.Show();
     }
 
-    private static void EnsureTesseractInPath()
+    private static string ResolveStoragePath()
     {
-        string[] knownPaths =
+        var appBase = AppContext.BaseDirectory;
+        var portableDataPath = Path.Combine(appBase, PortableDataFolderName);
+
+        if (CanUsePortableStorage(portableDataPath))
+        {
+            return portableDataPath;
+        }
+
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        return Path.Combine(localAppData, LocalDataFolderName);
+    }
+
+    private static bool CanUsePortableStorage(string portableDataPath)
+    {
+        try
+        {
+            Directory.CreateDirectory(portableDataPath);
+            var testPath = Path.Combine(portableDataPath, ".write-test");
+            File.WriteAllText(testPath, "ok");
+            File.Delete(testPath);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void ConfigurePortableRuntimePaths()
+    {
+        var appBase = AppContext.BaseDirectory;
+        var currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+
+        string[] candidates =
         [
+            Path.Combine(appBase, "tesseract"),
+            Path.Combine(appBase, "tools", "tesseract"),
             Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Programs",
@@ -52,31 +89,37 @@ public partial class App : Application
             @"C:\Program Files (x86)\Tesseract-OCR"
         ];
 
-        var currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        var resolved = candidates.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-        foreach (var dir in knownPaths)
+        if (resolved.Count == 0)
         {
-            if (!Directory.Exists(dir))
-                continue;
+            return;
+        }
 
-            if (!currentPath.Contains(dir, StringComparison.OrdinalIgnoreCase))
+        foreach (var dir in resolved)
+        {
+            if (!PathContains(currentPath, dir))
             {
-                Environment.SetEnvironmentVariable(
-                    "PATH",
-                    $"{currentPath};{dir}",
-                    EnvironmentVariableTarget.Process);
+                currentPath = string.IsNullOrWhiteSpace(currentPath)
+                    ? dir
+                    : $"{dir}{Path.PathSeparator}{currentPath}";
             }
 
             var tessdata = Path.Combine(dir, "tessdata");
             if (Directory.Exists(tessdata))
             {
-                Environment.SetEnvironmentVariable(
-                    "TESSDATA_PREFIX",
-                    tessdata,
-                    EnvironmentVariableTarget.Process);
+                Environment.SetEnvironmentVariable("TESSDATA_PREFIX", tessdata, EnvironmentVariableTarget.Process);
+                break;
             }
-
-            break;
         }
+
+        Environment.SetEnvironmentVariable("PATH", currentPath, EnvironmentVariableTarget.Process);
+    }
+
+    private static bool PathContains(string pathValue, string directory)
+    {
+        return pathValue
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+            .Any(entry => string.Equals(entry.Trim(), directory, StringComparison.OrdinalIgnoreCase));
     }
 }

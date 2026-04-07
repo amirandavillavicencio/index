@@ -1,7 +1,7 @@
 ﻿<Window x:Class="AppPortable.Desktop.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="AppPortable Desktop"
+        Title="Gabriela"
         Height="820"
         Width="1400"
         MinWidth="900"
@@ -108,7 +108,7 @@
                          Opacity=".75"
                          Margin="0,0,10,0"/>
                 <TextBlock FontWeight="Bold"
-                           Text="AppPortable Desktop"
+                           Text="Gabriela"
                            Margin="0,0,8,0"/>
                 <TextBlock Text="•"
                            Foreground="#9CA3AF"

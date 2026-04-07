@@ -6,6 +6,10 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <Platforms>x64</Platforms>
+    <AssemblyName>Gabriela</AssemblyName>
+    <Product>Gabriela</Product>
+    <PublishSingleFile>false</PublishSingleFile>
+    <SelfContained>true</SelfContained>
   </PropertyGroup>
 
   <ItemGroup>
