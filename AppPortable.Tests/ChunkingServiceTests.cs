@@ -51,7 +51,10 @@ public sealed class ChunkingServiceTests
             Assert.True(chunk.PageEnd >= chunk.PageStart);
         });
 
-        Assert.Contains(chunks, c => c.PageStart == 1 && c.PageEnd >= 2);
+        Assert.Equal(2, chunks.Count);
+        Assert.Contains(chunks, c => c.PageStart == 1 && c.PageEnd == 1);
+        Assert.Contains(chunks, c => c.PageStart == 2 && c.PageEnd == 2);
+        Assert.All(chunks, c => Assert.Equal("one_page_one_chunk", c.Metadata["strategy"]));
 
         var allLayerNames = chunks
             .SelectMany(c => c.ExtractionLayersInvolved)
