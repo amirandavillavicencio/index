@@ -11,7 +11,7 @@ namespace AppPortable.Infrastructure.Services;
 
 public sealed class TesseractOcrService : IOcrService
 {
-    public bool IsAvailable => ResolveTesseractExecutablePath() is not null;
+    public bool IsAvailable => PortablePathResolver.ResolveTesseractExecutablePathPortableFirst() is not null;
 
     [SupportedOSPlatform("windows")]
     [SupportedOSPlatform("linux")]
@@ -23,21 +23,18 @@ public sealed class TesseractOcrService : IOcrService
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var tesseractPath = ResolveTesseractExecutablePath();
+        var warnings = page.Warnings.ToList();
+        var tesseractPath = PortablePathResolver.ResolveTesseractExecutablePathPortableFirst();
         if (tesseractPath is null)
         {
-            var warnings = page.Warnings.ToList();
-            warnings.Add("Tesseract no encontrado en PATH.");
+            warnings.Add($"OCR deshabilitado: falta tesseract/tesseract.exe en '{PortablePathResolver.GetPortableTesseractExecutablePath()}' y no se encontró fallback en PATH.");
+            return ClonePage(page, warnings);
+        }
 
-            return new DocumentPage
-            {
-                PageNumber = page.PageNumber,
-                ExtractionLayer = page.ExtractionLayer,
-                OcrConfidence = page.OcrConfidence,
-                Text = page.Text,
-                TextLength = page.TextLength,
-                Warnings = warnings
-            };
+        var hasPortableSpanishModel = File.Exists(PortablePathResolver.GetPortableSpanishLanguageModelPath());
+        if (!hasPortableSpanishModel)
+        {
+            warnings.Add($"OCR advertencia: falta tesseract/tessdata/spa.traineddata en '{PortablePathResolver.GetPortableSpanishLanguageModelPath()}'. Se usará fallback de idioma.");
         }
 
         var tempDirectory = Path.GetTempPath();
@@ -53,6 +50,7 @@ public sealed class TesseractOcrService : IOcrService
                 tesseractPath,
                 tempPng,
                 tempBase,
+                hasPortableSpanishModel,
                 cancellationToken)).Trim();
 
             var finalText = string.IsNullOrWhiteSpace(ocrText)
@@ -70,23 +68,13 @@ public sealed class TesseractOcrService : IOcrService
                 OcrConfidence = null,
                 Text = finalText,
                 TextLength = finalText.Length,
-                Warnings = page.Warnings
+                Warnings = warnings
             };
         }
         catch (Exception ex)
         {
-            var warnings = page.Warnings.ToList();
             warnings.Add($"OCR error pag. {page.PageNumber}: {ex.Message}");
-
-            return new DocumentPage
-            {
-                PageNumber = page.PageNumber,
-                ExtractionLayer = page.ExtractionLayer,
-                OcrConfidence = page.OcrConfidence,
-                Text = page.Text,
-                TextLength = page.TextLength,
-                Warnings = warnings
-            };
+            return ClonePage(page, warnings);
         }
         finally
         {
@@ -142,8 +130,14 @@ public sealed class TesseractOcrService : IOcrService
         string tesseractPath,
         string imagePath,
         string outputBasePath,
+        bool hasPortableSpanishModel,
         CancellationToken ct)
     {
+        if (!hasPortableSpanishModel)
+        {
+            return await RunTesseractToFileAsync(tesseractPath, imagePath, outputBasePath, "eng", ct);
+        }
+
         try
         {
             return await RunTesseractToFileAsync(tesseractPath, imagePath, outputBasePath, "spa", ct);
@@ -221,6 +215,19 @@ public sealed class TesseractOcrService : IOcrService
                && bytes[2] == 0xBF;
     }
 
+    private static DocumentPage ClonePage(DocumentPage page, IReadOnlyList<string> warnings)
+    {
+        return new DocumentPage
+        {
+            PageNumber = page.PageNumber,
+            ExtractionLayer = page.ExtractionLayer,
+            OcrConfidence = page.OcrConfidence,
+            Text = page.Text,
+            TextLength = page.TextLength,
+            Warnings = warnings
+        };
+    }
+
     private static void TryDelete(string path)
     {
         try
@@ -233,44 +240,5 @@ public sealed class TesseractOcrService : IOcrService
         catch
         {
         }
-    }
-
-    private static string? ResolveTesseractExecutablePath()
-    {
-        var exeName = OperatingSystem.IsWindows() ? "tesseract.exe" : "tesseract";
-        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-
-        foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-        {
-            var full = Path.Combine(dir.Trim(), exeName);
-            if (File.Exists(full))
-            {
-                return full;
-            }
-        }
-
-        if (OperatingSystem.IsWindows())
-        {
-            string[] known =
-            [
-                Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "Programs",
-                    "Tesseract-OCR",
-                    "tesseract.exe"),
-                @"C:\Program Files\Tesseract-OCR\tesseract.exe",
-                @"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"
-            ];
-
-            foreach (var p in known)
-            {
-                if (File.Exists(p))
-                {
-                    return p;
-                }
-            }
-        }
-
-        return null;
     }
 }

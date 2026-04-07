@@ -3,7 +3,11 @@ bin/
 obj/
 publish/
 installer/
-AppPortable.Desktop/tesseract/
+AppPortable.Desktop/tesseract/*
+!AppPortable.Desktop/tesseract/.gitkeep
+!AppPortable.Desktop/tesseract/tessdata/
+AppPortable.Desktop/tesseract/tessdata/*
+!AppPortable.Desktop/tesseract/tessdata/.gitkeep
 *.log
 *.user
 *.suo

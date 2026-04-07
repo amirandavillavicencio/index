@@ -33,7 +33,7 @@ public sealed class JsonPersistenceService : IJsonPersistenceService
         }
 
         var tempPath = Path.Combine(
-            directory ?? Directory.GetCurrentDirectory(),
+            directory ?? AppContext.BaseDirectory,
             $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
 
         try

@@ -15,8 +15,7 @@ public sealed class LocalStorageService : ILocalStorageService
 
     public LocalStorageService(string? rootPath = null)
     {
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        RootPath = rootPath ?? Path.Combine(localAppData, "AppPortable");
+        RootPath = rootPath ?? PortablePathResolver.ResolveStorageRootPath();
     }
 
     public void EnsureInitialized()
