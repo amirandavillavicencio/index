@@ -1,12 +1,10 @@
-# Build
+.vs/
 bin/
 obj/
-out/
-
-# IDE
-.vs/
-.vscode/
-.idea/
+publish/
+installer/
+AppPortable.Desktop/tesseract/
+*.log
 *.user
 *.suo
 *.userosscache

@@ -13,4 +13,11 @@
     <ProjectReference Include="..\AppPortable.Infrastructure\AppPortable.Infrastructure.csproj" />
     <ProjectReference Include="..\AppPortable.Search\AppPortable.Search.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="tesseract\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
 </Project>

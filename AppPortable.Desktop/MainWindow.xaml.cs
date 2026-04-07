@@ -1,11 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using AppPortable.Core.Interfaces;
@@ -20,6 +18,7 @@ public partial class MainWindow : Window
     private readonly ISearchService _search;
     private string? _selectedPdf;
     private ProcessedDocument? _lastDoc;
+    private SearchResultRow? _selectedResult;
 
     public ObservableCollection<SearchResultRow> Results { get; } = new();
 
@@ -43,15 +42,34 @@ public partial class MainWindow : Window
             return;
 
         _selectedPdf = dlg.FileName;
+        _lastDoc = null;
+        _selectedResult = null;
+
+        BtnProcesar.IsEnabled = true;
+        BtnIrPagina.IsEnabled = false;
+        BtnExportar.IsEnabled = false;
+        BtnExportarDocumentoOcrMd.IsEnabled = false;
+
+        Results.Clear();
+
+        DetailDocName.Text = Path.GetFileName(_selectedPdf);
+        DetailPageInfo.Text = "PDF cargado. Falta procesar.";
+        DetailPageNum.Text = "Sin contenido cargado";
+        DetailContent.Text = "";
+
+        ResultsLabel.Text = "PDF cargado. Procesa e indexa para poder buscar.";
+        TitleStatus.Text = "PDF cargado";
+        StatusLeft.Text = $"Estado: PDF seleccionado • {Path.GetFileName(_selectedPdf)}";
+        StatusRight.Text = "Pendiente";
+
+        DocCard.Visibility = Visibility.Visible;
+        ProgressCard.Visibility = Visibility.Collapsed;
+        KpiRow.Visibility = Visibility.Collapsed;
+
         DocName.Text = Path.GetFileName(_selectedPdf);
         DocPages.Text = "–";
         DocChunks.Text = "–";
         DocBadgeText.Text = "Pendiente";
-        DocBadge.Background = System.Windows.Media.Brushes.LightYellow;
-        DocCard.Visibility = Visibility.Visible;
-        BtnProcesar.IsEnabled = true;
-
-        SetStatus("PDF cargado — listo para procesar");
     }
 
     private async void BtnProcesar_Click(object sender, RoutedEventArgs e)
@@ -59,86 +77,87 @@ public partial class MainWindow : Window
         if (_selectedPdf is null)
             return;
 
-        BtnCargar.IsEnabled = false;
-        BtnProcesar.IsEnabled = false;
-        ProgressCard.Visibility = Visibility.Visible;
-        KpiRow.Visibility = Visibility.Collapsed;
-
         try
         {
-            TitleStatus.Text = "Procesando...";
-            ProgressLabel.Text = "Procesando documento...";
-            ProgressPct.Text = "0%";
+            BtnProcesar.IsEnabled = false;
+            BtnExportar.IsEnabled = false;
+            BtnIrPagina.IsEnabled = false;
+            BtnExportarDocumentoOcrMd.IsEnabled = false;
+
+            ProgressCard.Visibility = Visibility.Visible;
             MainProgress.Value = 0;
-            StatusProgress.Value = 0;
-            StatusProgress.Visibility = Visibility.Visible;
+            ProgressPct.Text = "Procesando...";
+            ProgressLabel.Text = "Extrayendo texto y ejecutando OCR";
+            StatusRight.Text = "Procesando";
+            TitleStatus.Text = "Procesando";
+            DocBadgeText.Text = "Procesando";
 
-            _lastDoc = await _processor.ProcessAsync(_selectedPdf, false, CancellationToken.None);
-
-            DocPages.Text = _lastDoc.TotalPages.ToString();
-            DocChunks.Text = _lastDoc.Chunks.Count.ToString();
-            DocBadgeText.Text = "Indexado";
-            DocBadge.Background = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(220, 252, 231));
-            DocBadgeText.Foreground = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(22, 101, 52));
-
-            KpiPages.Text = _lastDoc.TotalPages.ToString();
-            KpiChunks.Text = _lastDoc.Chunks.Count.ToString();
-            KpiIndex.Text = _lastDoc.Chunks.Count.ToString();
-            KpiRow.Visibility = Visibility.Visible;
+            _lastDoc = await _processor.ProcessAsync(_selectedPdf, true, CancellationToken.None);
 
             MainProgress.Value = 100;
-            StatusProgress.Value = 100;
             ProgressPct.Text = "100%";
-            ProgressLabel.Text = "Procesamiento completado";
+            ProgressLabel.Text = "Proceso completado";
+
+            var pageCount = _lastDoc.Pages?.Count ?? 0;
+            var chunkCount = _lastDoc.Chunks?.Count ?? 0;
+
+            DocPages.Text = pageCount.ToString();
+            DocChunks.Text = chunkCount.ToString();
+            DocBadgeText.Text = "Procesado";
+
+            KpiRow.Visibility = Visibility.Visible;
+            KpiPages.Text = pageCount.ToString();
+            KpiChunks.Text = chunkCount.ToString();
+            KpiIndex.Text = "OK";
+
+            ResultsLabel.Text = "Procesamiento completado. Ya puedes buscar.";
+            StatusLeft.Text = $"Estado: procesado • {Path.GetFileName(_selectedPdf)}";
+            StatusRight.Text = "Listo";
             TitleStatus.Text = "Listo";
 
-            SetStatus($"Indexado OK — {_lastDoc.Chunks.Count} chunks, {_lastDoc.TotalPages} páginas");
+            DetailDocName.Text = Path.GetFileName(_selectedPdf);
+            DetailPageInfo.Text = $"Documento procesado • {pageCount} páginas";
+            DetailPageNum.Text = "Selecciona un resultado para ver el contenido";
+            DetailContent.Text = "";
+
+            BtnExportarDocumentoOcrMd.IsEnabled = true;
+            BtnExportar.IsEnabled = Results.Count > 0;
         }
         catch (Exception ex)
         {
             MessageBox.Show(
-                $"Error al procesar:\n{ex.Message}",
+                $"Error al procesar el PDF:\n{ex.Message}",
                 "Error",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
 
-            SetStatus("Error durante el procesamiento");
+            StatusRight.Text = "Error";
             TitleStatus.Text = "Error";
+            DocBadgeText.Text = "Error";
         }
         finally
         {
-            BtnCargar.IsEnabled = true;
             BtnProcesar.IsEnabled = true;
-            StatusProgress.Visibility = Visibility.Collapsed;
-            ProgressCard.Visibility = Visibility.Collapsed;
         }
     }
 
     private async void BtnBuscar_Click(object sender, RoutedEventArgs e)
     {
-        await RunSearch();
-    }
-
-    private async void SearchBox_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Enter)
-            await RunSearch();
-    }
-
-    private async Task RunSearch()
-    {
         var query = SearchBox.Text.Trim();
-        if (string.IsNullOrEmpty(query))
+        if (string.IsNullOrWhiteSpace(query))
             return;
-
-        Results.Clear();
-        ResultsLabel.Text = "Buscando...";
-        BtnExportar.IsEnabled = false;
 
         try
         {
+            Results.Clear();
+            _selectedResult = null;
+            BtnIrPagina.IsEnabled = false;
+            BtnExportar.IsEnabled = false;
+
+            ResultsLabel.Text = "Buscando...";
+            StatusRight.Text = "Buscando";
+            TitleStatus.Text = "Buscando";
+
             var hits = await _search.SearchAsync(query, 50, CancellationToken.None);
 
             foreach (var h in hits)
@@ -148,29 +167,55 @@ public partial class MainWindow : Window
                     DocumentName = Path.GetFileName(h.SourceFile),
                     PageNumber = h.PageStart,
                     Score = h.Score.ToString("F2"),
-                    Snippet = h.Snippet?.Trim() ?? string.Empty
+                    Snippet = h.Snippet ?? ""
                 });
             }
 
-            ResultsLabel.Text = Results.Count > 0
-                ? $"{Results.Count} resultado(s) para \"{query}\""
-                : "Sin resultados.";
-
+            ResultsLabel.Text = $"Resultados: {Results.Count}";
+            StatusRight.Text = "Listo";
+            TitleStatus.Text = "Listo";
             BtnExportar.IsEnabled = Results.Count > 0;
-            SetStatus($"Búsqueda: {Results.Count} resultados");
+
+            if (Results.Count == 0)
+            {
+                DetailPageInfo.Text = "Sin resultados";
+                DetailPageNum.Text = "No se encontraron coincidencias";
+                DetailContent.Text = "";
+            }
         }
         catch (Exception ex)
         {
-            ResultsLabel.Text = $"Error: {ex.Message}";
+            MessageBox.Show(
+                $"Error en la búsqueda:\n{ex.Message}",
+                "Error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+
+            ResultsLabel.Text = "Error al buscar.";
+            StatusRight.Text = "Error";
+            TitleStatus.Text = "Error";
         }
+    }
+
+    private void SearchBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+            BtnBuscar_Click(sender, e);
     }
 
     private void BtnLimpiar_Click(object sender, RoutedEventArgs e)
     {
-        SearchBox.Text = string.Empty;
+        SearchBox.Text = "";
         Results.Clear();
+        _selectedResult = null;
+
+        BtnIrPagina.IsEnabled = false;
+        BtnExportar.IsEnabled = false;
+
         ResultsLabel.Text = "Escribe un término y presiona Buscar.";
-        ClearDetail();
+        DetailPageInfo.Text = "Selecciona un resultado";
+        DetailPageNum.Text = "Selecciona un resultado para ver el contenido";
+        DetailContent.Text = "";
     }
 
     private void ResultsList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -178,86 +223,144 @@ public partial class MainWindow : Window
         if (ResultsList.SelectedItem is not SearchResultRow row)
             return;
 
-        DetailDocName.Text = row.DocumentName;
-        DetailPageInfo.Text = $"Página {row.PageNumber}  •  Score {row.Score}";
-        DetailPageNum.Text = $"Página {row.PageNumber}";
-        DetailContent.Text = row.Snippet;
-        BtnIrPagina.IsEnabled = true;
-    }
+        _selectedResult = row;
 
-    private void ClearDetail()
-    {
-        DetailDocName.Text = "–";
-        DetailPageInfo.Text = "Selecciona un resultado";
-        DetailPageNum.Text = "Selecciona un resultado para ver el contenido";
-        DetailContent.Text = string.Empty;
-        BtnIrPagina.IsEnabled = false;
+        var pageText = _lastDoc?.Pages?
+            .FirstOrDefault(p => p.PageNumber == row.PageNumber)?
+            .Text;
+
+        DetailDocName.Text = row.DocumentName;
+        DetailPageInfo.Text = $"Página {row.PageNumber}";
+        DetailPageNum.Text = $"Página {row.PageNumber}";
+        DetailContent.Text = string.IsNullOrWhiteSpace(pageText)
+            ? row.Snippet
+            : pageText.Trim();
+
+        BtnIrPagina.IsEnabled = true;
+        BtnExportar.IsEnabled = Results.Count > 0;
     }
 
     private void BtnExportar_Click(object sender, RoutedEventArgs e)
     {
+        if (Results.Count == 0)
+        {
+            MessageBox.Show("No hay resultados para exportar.");
+            return;
+        }
+
         var dlg = new SaveFileDialog
         {
-            Filter = "CSV|*.csv|JSON|*.json",
-            FileName = $"resultados_{DateTime.Now:yyyyMMdd_HHmm}"
+            Filter = "Markdown|*.md|Texto|*.txt",
+            FileName = "resultados_busqueda.md"
         };
 
         if (dlg.ShowDialog() != true)
             return;
 
-        try
+        var sb = new StringBuilder();
+        sb.AppendLine("# Resultados de búsqueda");
+        sb.AppendLine();
+
+        if (!string.IsNullOrWhiteSpace(SearchBox.Text))
         {
-            if (dlg.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
-            {
-                var json = System.Text.Json.JsonSerializer.Serialize(
-                    Results,
-                    new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-
-                File.WriteAllText(dlg.FileName, json, Encoding.UTF8);
-            }
-            else
-            {
-                var lines = new List<string> { "Documento,Página,Score,Fragmento" };
-                lines.AddRange(Results.Select(r =>
-                    $"\"{r.DocumentName}\",{r.PageNumber},{r.Score},\"{r.Snippet.Replace("\"", "'")}\""));
-
-                File.WriteAllLines(dlg.FileName, lines, Encoding.UTF8);
-            }
-
-            SetStatus($"Exportado → {Path.GetFileName(dlg.FileName)}");
+            sb.AppendLine($"**Consulta:** {SearchBox.Text.Trim()}");
+            sb.AppendLine();
         }
-        catch (Exception ex)
+
+        foreach (var item in Results)
         {
-            MessageBox.Show(
-                $"Error al exportar:\n{ex.Message}",
-                "Error",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            sb.AppendLine($"## {item.DocumentName}");
+            sb.AppendLine($"- Página: {item.PageNumber}");
+            sb.AppendLine($"- Score: {item.Score}");
+            sb.AppendLine();
+            sb.AppendLine(item.Snippet);
+            sb.AppendLine();
+            sb.AppendLine("---");
+            sb.AppendLine();
         }
+
+        File.WriteAllText(dlg.FileName, sb.ToString(), new UTF8Encoding(false));
+        MessageBox.Show("Resultados exportados correctamente.");
     }
 
     private void BtnIrPagina_Click(object sender, RoutedEventArgs e)
     {
-        if (ResultsList.SelectedItem is not SearchResultRow row)
+        if (_selectedResult is null)
+        {
+            MessageBox.Show("Selecciona un resultado primero.");
             return;
+        }
 
-        MessageBox.Show(
-            $"Página {row.PageNumber} de {row.DocumentName}\n\nIntegración con visor PDF pendiente.",
-            "Ir a página",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        var pageText = _lastDoc?.Pages?
+            .FirstOrDefault(p => p.PageNumber == _selectedResult.PageNumber)?
+            .Text;
+
+        DetailDocName.Text = _selectedResult.DocumentName;
+        DetailPageInfo.Text = $"Página {_selectedResult.PageNumber}";
+        DetailPageNum.Text = $"Página {_selectedResult.PageNumber}";
+        DetailContent.Text = string.IsNullOrWhiteSpace(pageText)
+            ? _selectedResult.Snippet
+            : pageText.Trim();
     }
 
-    private void SetStatus(string msg)
+    private void BtnExportarDocumentoOcrMd_Click(object sender, RoutedEventArgs e)
     {
-        StatusLeft.Text = $"Estado: {msg}";
+        if (_lastDoc is null)
+        {
+            MessageBox.Show("Procesa un PDF primero.");
+            return;
+        }
+
+        var dlg = new SaveFileDialog
+        {
+            Filter = "Markdown|*.md",
+            FileName = "documento_ocr.md"
+        };
+
+        if (dlg.ShowDialog() != true)
+            return;
+
+        ExportDocumentoOcr(dlg.FileName, _lastDoc);
+        MessageBox.Show("OCR completo exportado correctamente.");
+    }
+
+    private void ExportDocumentoOcr(string path, ProcessedDocument doc)
+    {
+        var sb = new StringBuilder();
+
+        sb.AppendLine($"# {Path.GetFileName(doc.SourceFile)}");
+        sb.AppendLine();
+
+        sb.AppendLine("## Índice");
+        sb.AppendLine();
+
+        foreach (var p in doc.Pages)
+            sb.AppendLine($"{p.PageNumber}. [Página {p.PageNumber}](#pagina-{p.PageNumber})");
+
+        sb.AppendLine();
+        sb.AppendLine("---");
+        sb.AppendLine();
+
+        foreach (var p in doc.Pages)
+        {
+            sb.AppendLine($"## Página {p.PageNumber}");
+            sb.AppendLine($"<a id=\"pagina-{p.PageNumber}\"></a>");
+            sb.AppendLine();
+
+            sb.AppendLine("```text");
+            sb.AppendLine(string.IsNullOrWhiteSpace(p.Text) ? "[Sin texto]" : p.Text);
+            sb.AppendLine("```");
+            sb.AppendLine();
+        }
+
+        File.WriteAllText(path, sb.ToString(), new UTF8Encoding(false));
     }
 }
 
 public sealed class SearchResultRow
 {
-    public string DocumentName { get; set; } = string.Empty;
+    public string DocumentName { get; set; } = "";
     public int PageNumber { get; set; }
-    public string Score { get; set; } = string.Empty;
-    public string Snippet { get; set; } = string.Empty;
+    public string Score { get; set; } = "";
+    public string Snippet { get; set; } = "";
 }
