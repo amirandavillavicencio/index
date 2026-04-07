@@ -27,7 +27,7 @@ public sealed class TesseractOcrService : IOcrService
         if (tesseractPath is null)
         {
             var warnings = page.Warnings.ToList();
-            warnings.Add("Tesseract no encontrado en PATH.");
+            warnings.Add("Tesseract no encontrado en carpeta portable (./tesseract o ./tools/tesseract).");
 
             return new DocumentPage
             {
@@ -237,37 +237,26 @@ public sealed class TesseractOcrService : IOcrService
 
     private static string? ResolveTesseractExecutablePath()
     {
-        var exeName = OperatingSystem.IsWindows() ? "tesseract.exe" : "tesseract";
-        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-
-        foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        var configuredPath = Environment.GetEnvironmentVariable("GABRIELA_TESSERACT_EXE");
+        if (!string.IsNullOrWhiteSpace(configuredPath) && File.Exists(configuredPath))
         {
-            var full = Path.Combine(dir.Trim(), exeName);
-            if (File.Exists(full))
-            {
-                return full;
-            }
+            return configuredPath;
         }
 
-        if (OperatingSystem.IsWindows())
-        {
-            string[] known =
-            [
-                Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "Programs",
-                    "Tesseract-OCR",
-                    "tesseract.exe"),
-                @"C:\Program Files\Tesseract-OCR\tesseract.exe",
-                @"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"
-            ];
+        var exeName = OperatingSystem.IsWindows() ? "tesseract.exe" : "tesseract";
+        var appBase = AppContext.BaseDirectory;
 
-            foreach (var p in known)
+        string[] candidates =
+        [
+            Path.Combine(appBase, "tesseract", exeName),
+            Path.Combine(appBase, "tools", "tesseract", exeName)
+        ];
+
+        foreach (var candidate in candidates)
+        {
+            if (File.Exists(candidate))
             {
-                if (File.Exists(p))
-                {
-                    return p;
-                }
+                return candidate;
             }
         }
 

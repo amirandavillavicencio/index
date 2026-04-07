@@ -74,52 +74,37 @@ public partial class App : Application
 
     private static void ConfigurePortableRuntimePaths()
     {
-        var appBase = AppContext.BaseDirectory;
-        var currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-
-        string[] candidates =
-        [
-            Path.Combine(appBase, "tesseract"),
-            Path.Combine(appBase, "tools", "tesseract"),
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Programs",
-                "Tesseract-OCR"),
-            @"C:\Program Files\Tesseract-OCR",
-            @"C:\Program Files (x86)\Tesseract-OCR"
-        ];
-
-        var resolved = candidates.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-
-        if (resolved.Count == 0)
+        var tesseractDirectory = ResolvePortableTesseractDirectory();
+        if (tesseractDirectory is null)
         {
             return;
         }
 
-        foreach (var dir in resolved)
-        {
-            if (!PathContains(currentPath, dir))
-            {
-                currentPath = string.IsNullOrWhiteSpace(currentPath)
-                    ? dir
-                    : $"{dir}{Path.PathSeparator}{currentPath}";
-            }
+        var tesseractExeName = OperatingSystem.IsWindows() ? "tesseract.exe" : "tesseract";
+        var tesseractExecutablePath = Path.Combine(tesseractDirectory, tesseractExeName);
 
-            var tessdata = Path.Combine(dir, "tessdata");
-            if (Directory.Exists(tessdata))
-            {
-                Environment.SetEnvironmentVariable("TESSDATA_PREFIX", tessdata, EnvironmentVariableTarget.Process);
-                break;
-            }
+        if (File.Exists(tesseractExecutablePath))
+        {
+            Environment.SetEnvironmentVariable("GABRIELA_TESSERACT_EXE", tesseractExecutablePath, EnvironmentVariableTarget.Process);
         }
 
-        Environment.SetEnvironmentVariable("PATH", currentPath, EnvironmentVariableTarget.Process);
+        var tessdata = Path.Combine(tesseractDirectory, "tessdata");
+        if (Directory.Exists(tessdata))
+        {
+            Environment.SetEnvironmentVariable("TESSDATA_PREFIX", tessdata, EnvironmentVariableTarget.Process);
+        }
     }
 
-    private static bool PathContains(string pathValue, string directory)
+    private static string? ResolvePortableTesseractDirectory()
     {
-        return pathValue
-            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
-            .Any(entry => string.Equals(entry.Trim(), directory, StringComparison.OrdinalIgnoreCase));
+        var appBase = AppContext.BaseDirectory;
+
+        string[] candidates =
+        [
+            Path.Combine(appBase, "tesseract"),
+            Path.Combine(appBase, "tools", "tesseract")
+        ];
+
+        return candidates.FirstOrDefault(Directory.Exists);
     }
 }
