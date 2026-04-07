@@ -78,8 +78,10 @@ publish-portable/
 ## Build y tests
 
 ```bash
-dotnet restore AppPortable.sln
-dotnet build AppPortable.sln -c Release --no-restore
+dotnet restore AppPortable.Desktop/AppPortable.Desktop.csproj
+dotnet restore AppPortable.Tests/AppPortable.Tests.csproj
+dotnet build AppPortable.Desktop/AppPortable.Desktop.csproj -c Release --no-restore
+dotnet build AppPortable.Tests/AppPortable.Tests.csproj -c Release --no-restore
 dotnet test AppPortable.Tests/AppPortable.Tests.csproj -c Release --no-build
 ```
 
@@ -105,7 +107,6 @@ dotnet test AppPortable.Tests/AppPortable.Tests.csproj -c Release --no-build
 ├─ AppPortable.Infrastructure/
 ├─ AppPortable.Search/
 ├─ AppPortable.Desktop/
-├─ AppPortable.Web/
 ├─ AppPortable.Tests/
 ├─ docs/
 └─ scripts/
