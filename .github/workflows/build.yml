@@ -19,11 +19,15 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Restore Desktop
-        run: dotnet restore AppPortable.Desktop/AppPortable.Desktop.csproj
+      - name: Validate solution has no AppPortable.Web
+        shell: pwsh
+        run: |
+          if (Select-String -Path AppPortable.sln -Pattern "AppPortable.Web") {
+            throw "Stale AppPortable.Web reference found in AppPortable.sln"
+          }
 
-      - name: Restore Tests
-        run: dotnet restore AppPortable.Tests/AppPortable.Tests.csproj
+      - name: Restore Solution
+        run: dotnet restore AppPortable.sln
 
       - name: Build Desktop
         run: dotnet build AppPortable.Desktop/AppPortable.Desktop.csproj -c Release --no-restore
