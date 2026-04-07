@@ -9,6 +9,7 @@
     <AssemblyName>Gabriela</AssemblyName>
     <Product>Gabriela</Product>
     <PublishSingleFile>false</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
     <SelfContained>true</SelfContained>
   </PropertyGroup>
 
@@ -23,5 +24,21 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
+    <Content Include="data\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
+
+  <Target Name="CreatePortableFolders" AfterTargets="Publish">
+    <MakeDir Directories="$(PublishDir)data" />
+    <MakeDir Directories="$(PublishDir)data\documents" />
+    <MakeDir Directories="$(PublishDir)data\json" />
+    <MakeDir Directories="$(PublishDir)data\chunks" />
+    <MakeDir Directories="$(PublishDir)data\index" />
+    <MakeDir Directories="$(PublishDir)data\temp" />
+    <MakeDir Directories="$(PublishDir)data\logs" />
+    <MakeDir Directories="$(PublishDir)tesseract" />
+    <MakeDir Directories="$(PublishDir)tesseract\tessdata" />
+  </Target>
 </Project>
