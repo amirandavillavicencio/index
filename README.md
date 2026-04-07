@@ -1,89 +1,103 @@
-# AppPortable
+# Gabriela (AppPortable)
 
-AppPortable es una aplicación de escritorio **WPF (.NET 8)** para procesar PDFs de forma local (offline-first), generar metadatos estructurados, persistirlos en JSON e indexar contenido en **SQLite FTS5** para búsqueda rápida.
+Gabriela es una aplicación de escritorio **WPF (.NET 8)** para procesar PDFs de forma local (offline-first), ejecutar OCR con Tesseract, generar chunks, persistir en JSON e indexar en **SQLite FTS5**.
 
-## Overview
+## Objetivo actual
 
-Flujo principal actual:
+Este repositorio está preparado para generar una **carpeta portable para Windows x64** que se pueda copiar a otra PC y ejecutar con doble clic, **sin instalador** y **sin requerir permisos de administrador**.
 
-1. Selección de PDF desde la UI.
-2. Copia del archivo al almacenamiento local de la app.
-3. Extracción de texto por página (capa nativa PDF).
-4. Fallback OCR (solo si está disponible y si hay páginas sin texto).
-5. Construcción de documento procesado + chunks.
-6. Persistencia local en JSON.
-7. Indexación en SQLite FTS5.
-8. Búsqueda local con ranking y snippet.
+## Qué se reutiliza (sin reescribir lógica de negocio)
 
-## Stack real
+Se mantiene la lógica existente de:
 
-- **Runtime:** .NET 8
-- **UI:** WPF (Windows)
-- **Extracción PDF:** iText7
-- **Persistencia:** JSON local (`snake_case`)
-- **Índice/Búsqueda:** SQLite + FTS5
-- **Testing:** xUnit (.NET test project)
-- **CI/CD:** GitHub Actions (`windows-latest`)
+1. Carga de PDF.
+2. Extracción de texto del PDF.
+3. OCR con Tesseract (fallback).
+4. Generación de chunks.
+5. Persistencia local en JSON.
+6. Indexación local en SQLite.
+7. Búsqueda local y visualización de resultados.
 
-## Arquitectura resumida
+Proyectos de dominio y servicios mantenidos:
 
-- `AppPortable.Core`: contratos, modelos y orquestación de pipeline.
-- `AppPortable.Infrastructure`: servicios de extracción PDF, OCR fallback, storage local y persistencia JSON.
-- `AppPortable.Search`: indexación y consulta sobre SQLite FTS5.
-- `AppPortable.Desktop`: aplicación WPF/MVVM.
-- `AppPortable.Web`: base web mínima (ASP.NET Core) reutilizando servicios existentes.
-- `AppPortable.Tests`: pruebas de pipeline, extracción, chunking, persistencia e índice.
-
-Más detalle: `docs/ARCHITECTURE.md`.
+- `AppPortable.Core`
+- `AppPortable.Infrastructure`
+- `AppPortable.Search`
 
 ## Requisitos
 
-- **OS para ejecución UI:** Windows 10/11 x64.
-- **SDK:** .NET 8.0+.
-- **Opcional (OCR):** binario `tesseract` disponible en `PATH`.
+- Windows 10/11 x64.
+- .NET SDK 8.0+ solo para compilar/publicar (el usuario final **no** lo necesita).
+- Tesseract portable (carpeta local con `tesseract.exe` y `tessdata`) para OCR dentro del paquete portable.
 
-> Nota: el pipeline funciona sin OCR. Si no hay OCR disponible, las páginas sin texto nativo quedan marcadas como no extraídas por OCR.
+## Publicación portable (comando esperado)
 
-## Restore / Build / Test / Publish
+```bash
+dotnet publish AppPortable.Desktop/AppPortable.Desktop.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=false -o .\publish-portable
+```
+
+También puedes usar el script:
+
+```powershell
+pwsh ./scripts/publish-portable.ps1
+```
+
+## Estructura esperada de la carpeta portable
+
+```text
+publish-portable/
+├─ Gabriela.exe
+├─ AppPortable.Core.dll
+├─ AppPortable.Infrastructure.dll
+├─ AppPortable.Search.dll
+├─ ...runtime self-contained de .NET...
+├─ tesseract/
+│  ├─ tesseract.exe
+│  └─ tessdata/
+│     ├─ spa.traineddata
+│     └─ eng.traineddata
+└─ data/
+   ├─ documents/
+   ├─ json/
+   ├─ chunks/
+   ├─ index/
+   │  └─ appportable.db
+   ├─ temp/
+   └─ logs/
+```
+
+> Nota: `data/` se crea automáticamente junto al ejecutable cuando hay permisos de escritura. Si la carpeta no es escribible, la app usa `%LOCALAPPDATA%\Gabriela`.
+
+## Ejecución de usuario final
+
+1. Copiar la carpeta `publish-portable` a la PC destino.
+2. Verificar que exista `tesseract\tesseract.exe` y `tesseract\tessdata`.
+3. Ejecutar `Gabriela.exe` con doble clic.
+4. Flujo en UI: **Cargar PDF → Procesar/OCR → Buscar → Ver resultados**.
+
+## Build y tests
 
 ```bash
 dotnet restore AppPortable.sln
 dotnet build AppPortable.sln -c Release --no-restore
 dotnet test AppPortable.Tests/AppPortable.Tests.csproj -c Release --no-build
-dotnet publish AppPortable.Desktop/AppPortable.Desktop.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true
 ```
 
-Salida de publicación esperada:
+## Dependencias que causaban fricción y cómo se resolvieron
 
-- Carpeta: `AppPortable.Desktop/bin/Release/net8.0-windows/win-x64/publish/`
-- Ejecutable self-contained single-file para Windows x64.
+- **Fricción:** Dependencia implícita de Tesseract instalado en `PATH`/`Program Files`.
+  - **Cambio:** Se prioriza carpeta relativa portable (`./tesseract` o `./tools/tesseract`) al iniciar la app.
+- **Fricción:** Ruta de datos fija orientada a `%LOCALAPPDATA%\AppPortable`.
+  - **Cambio:** Se habilita modo portable escribiendo en `./data` junto al ejecutable, con fallback seguro a `%LOCALAPPDATA%\Gabriela`.
+- **Fricción:** Publicación documentada como single-file.
+  - **Cambio:** Publicación portable multiarchivo self-contained (sin requerir instalación de .NET).
 
-## Uso rápido
+## Limitaciones pendientes
 
-```bash
-dotnet run --project AppPortable.Desktop/AppPortable.Desktop.csproj
-```
+- OCR depende de que la carpeta portable incluya binarios y `tessdata` válidos de Tesseract.
+- Esta app sigue siendo de escritorio Windows (WPF); no hay soporte de ejecución UI fuera de Windows.
 
-Uso en UI:
-
-1. Click en **Cargar PDF**.
-2. Esperar procesamiento/indexación local.
-3. Escribir consulta en caja de búsqueda.
-4. Revisar resultados y detalle.
-
-## Uso rápido (web mínima)
-
-```bash
-dotnet run --project AppPortable.Web/AppPortable.Web.csproj
-```
-
-Luego abrir la raíz de la app web para probar el flujo:
-
-1. Subir PDF.
-2. Procesar/indexar.
-3. Buscar.
-
-## Estructura de carpetas
+## Estructura del repositorio
 
 ```text
 .
@@ -93,22 +107,6 @@ Luego abrir la raíz de la app web para probar el flujo:
 ├─ AppPortable.Desktop/
 ├─ AppPortable.Web/
 ├─ AppPortable.Tests/
-├─ .github/workflows/build.yml
-└─ docs/
-   ├─ ARCHITECTURE.md
-   └─ BUILD.md
+├─ docs/
+└─ scripts/
 ```
-
-## OCR local y tessdata
-
-Estado actual del OCR:
-
-- El proyecto detecta disponibilidad de `tesseract` en `PATH`.
-- Existe servicio OCR de fallback (`TesseractOcrService`), pero en el estado actual **no ejecuta render/OCR real por página**; agrega advertencia cuando aplica fallback.
-- Si tu instalación de Tesseract requiere `tessdata` en ubicación específica, configúrala según tu instalación local (por ejemplo, `TESSDATA_PREFIX`).
-
-## Limitaciones actuales
-
-- OCR no está implementado end-to-end (fallback preparado, pero sin extracción OCR real de imagen por página).
-- La UI está orientada a Windows (WPF).
-- Persistencia e índice son locales (sin sincronización remota).

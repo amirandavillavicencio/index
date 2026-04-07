@@ -1,62 +1,35 @@
-# Build & Publish
+# Build & Publish (Portable Windows)
 
 ## Prerrequisitos
 
-- Windows 10/11 x64 (requerido para ejecutar la app WPF publicada).
-- .NET SDK 8.0 o superior.
-- Git (para clonar repositorio).
-- Opcional para fallback OCR: `tesseract` disponible en `PATH`.
+- Windows 10/11 x64 (para ejecutar la UI WPF publicada).
+- .NET SDK 8.0+ (solo para compilar/publicar).
+- Tesseract portable (carpeta con `tesseract.exe` y `tessdata`).
 
-## Restore
+## Restore / Build / Test
 
 ```bash
 dotnet restore AppPortable.sln
-```
-
-## Build (Release)
-
-```bash
 dotnet build AppPortable.sln -c Release --no-restore
-```
-
-## Test
-
-```bash
 dotnet test AppPortable.Tests/AppPortable.Tests.csproj -c Release --no-build
 ```
 
-## Publish (Windows x64 self-contained single-file)
+## Publish portable (self-contained)
 
 ```bash
-dotnet publish AppPortable.Desktop/AppPortable.Desktop.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true
+dotnet publish AppPortable.Desktop/AppPortable.Desktop.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=false -o .\publish-portable
 ```
 
-## Salida esperada del publish
+## Script opcional
 
-Carpeta de salida:
-
-- `AppPortable.Desktop/bin/Release/net8.0-windows/win-x64/publish/`
-
-Contenido esperado:
-
-- ejecutable para Windows x64,
-- artefacto self-contained,
-- empaquetado single-file,
-- librerías nativas incluidas para self-extract.
-
-## Ejecución local rápida
-
-```bash
-dotnet run --project AppPortable.Desktop/AppPortable.Desktop.csproj
+```powershell
+pwsh ./scripts/publish-portable.ps1
 ```
 
-## Notas Windows / WPF
+## Post-publish
 
-- `AppPortable.Desktop` usa `TargetFramework` `net8.0-windows` y `UseWPF=true`.
-- Aunque restore/build puede ejecutarse en otros entornos con targeting habilitado, la ejecución de la UI publicada está pensada para Windows.
+1. Copia `tesseract.exe` y `tessdata` dentro de `publish-portable\tesseract\`.
+2. Ejecuta `publish-portable\Gabriela.exe` con doble clic.
+3. La app crea `publish-portable\data\` en modo portable (si la carpeta es escribible).
 
-## Notas OCR / tessdata
-
-- El fallback OCR depende de detectar el ejecutable `tesseract` en `PATH`.
-- Si tu instalación de Tesseract requiere datos de idioma (`tessdata`) fuera de rutas por defecto, configura la variable de entorno correspondiente (por ejemplo `TESSDATA_PREFIX`) según tu instalación.
-- Estado actual: el servicio OCR existe como fallback, pero no realiza OCR completo por rasterización de página en este repo.
+Si no hay permisos de escritura en la carpeta portable, la app usa `%LOCALAPPDATA%\Gabriela` automáticamente.
